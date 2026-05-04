@@ -607,19 +607,19 @@ function wayLengthM(nodes) {
 function calcConfidence(alleyLat, alleyLng, panoLat, panoLng, isAlleyTag, wayNodes) {
   const dist = haversine(alleyLat, alleyLng, panoLat, panoLng);
   // Distance: primary factor
-  let score = dist < 10  ? 100
-            : dist < 25  ? 92
-            : dist < 50  ? 82
-            : dist < 100 ? 68
-            : dist < 250 ? 48
-            : dist < 500 ? 28
-            : 10;
+  let score = dist < 10  ? 78
+            : dist < 25  ? 68
+            : dist < 50  ? 56
+            : dist < 100 ? 42
+            : dist < 250 ? 28
+            : dist < 500 ? 15
+            : 6;
   // Proper alley tag vs fallback service road
-  if (!isAlleyTag) score -= 15;
+  if (!isAlleyTag) score -= 12;
   // Way length: short enclosed alleys score better
   const len = wayLengthM(wayNodes);
-  if (len < 40)  score += 5;
-  else if (len > 400) score -= 8;
+  if (len < 40)  score += 6;
+  else if (len > 400) score -= 10;
   return Math.max(0, Math.min(100, Math.round(score)));
 }
 
