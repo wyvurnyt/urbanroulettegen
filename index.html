@@ -608,12 +608,12 @@ function calcConfidence(alleyLat, alleyLng, panoLat, panoLng, isAlleyTag, wayNod
   const dist = haversine(alleyLat, alleyLng, panoLat, panoLng);
   // Distance: primary factor
   let score = dist < 10  ? 78
-            : dist < 25  ? 68
-            : dist < 50  ? 56
-            : dist < 100 ? 42
-            : dist < 250 ? 28
-            : dist < 500 ? 15
-            : 6;
+            : dist < 20  ? 65
+            : dist < 35  ? 45
+            : dist < 60  ? 25
+            : dist < 100 ? 12
+            : dist < 200 ? 6
+            : 2;
   // Proper alley tag vs fallback service road
   if (!isAlleyTag) score -= 12;
   // Way length: short enclosed alleys score better
