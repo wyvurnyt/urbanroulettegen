@@ -842,7 +842,7 @@ async function findAlley() {
       confEl.style.color = '';
     }
 
-    document.getElementById('result-title').textContent = title;
+    document.getElementById('result-title').textContent = cachedArea.displayName;
     document.getElementById('result-coords').textContent = `${svLat}, ${svLng}`;
     document.getElementById('result-sv').href  = svHref;
     document.getElementById('result-map').href = `https://www.google.com/maps?q=${svLat},${svLng}`;
