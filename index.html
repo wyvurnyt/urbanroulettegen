@@ -918,9 +918,35 @@ async function findAlley() {
       startTimer(s => `Searching${attempt > 1 ? ` (attempt ${attempt})` : ''}... ${s}s`);
       const data = await overpassFetch(buildBboxQuery(patch.s, patch.w, patch.n, patch.e), signal);
       ways = data.elements.filter(e => e.type === 'way' && e.geometry?.length >= 2);
-      if (!ways.length) continue;
 
-      way = ways[Math.floor(Math.random() * ways.length)];
+      // Option 2: skip sparse patches — fewer than 5 ways suggests rural/no SV coverage
+      if (ways.length < 5) continue;
+
+      // Option 1: density-bias way selection — score each way by how many other way
+      // centroids fall within ~300 m, then sample from the top half by density.
+      // More neighbours = more urban = more likely to have Street View.
+      const centroids = ways.map(w => {
+        const lats = w.geometry.map(n => n.lat);
+        const lons = w.geometry.map(n => n.lon);
+        return {
+          lat: lats.reduce((a, b) => a + b, 0) / lats.length,
+          lon: lons.reduce((a, b) => a + b, 0) / lons.length,
+        };
+      });
+      const DENSITY_DEG = 0.003; // ~300 m in degrees
+      const scored = ways.map((w, i) => {
+        let neighbours = 0;
+        for (let j = 0; j < centroids.length; j++) {
+          if (i === j) continue;
+          if (Math.abs(centroids[i].lat - centroids[j].lat) < DENSITY_DEG &&
+              Math.abs(centroids[i].lon - centroids[j].lon) < DENSITY_DEG) neighbours++;
+        }
+        return { w, neighbours };
+      });
+      scored.sort((a, b) => b.neighbours - a.neighbours);
+      const topHalf = scored.slice(0, Math.max(1, Math.ceil(scored.length / 2))).map(s => s.w);
+
+      way = topHalf[Math.floor(Math.random() * topHalf.length)];
       isAlleyTag = way.tags?.service === 'alley';
       const [lat, lng] = samplePoint(way.geometry);
       loc = { lat: +lat.toFixed(6), lng: +lng.toFixed(6) };
