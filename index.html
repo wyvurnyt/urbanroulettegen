@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Alley Finder</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Roboto', sans-serif;
+    background: #111;
+    color: #ccc;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 3rem 1.5rem;
+  }
+
+  h1 {
+    color: #fff;
+    font-size: 0.9rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    margin-bottom: 2.5rem;
+    opacity: 0.4;
+  }
+
+  /* Search */
+  .search-wrap {
+    position: relative;
+    width: 100%;
+    max-width: 420px;
+    margin-bottom: 0.5rem;
+  }
+
+  .search-row {
+    display: flex;
+    gap: 0.5rem;
+  }
+
+  #countryInput {
+    flex: 1;
+    background: #1a1a1a;
+    border: 1px solid #333;
+    color: #ccc;
+    font-family: 'Roboto', sans-serif;
+    font-size: 1rem;
+    padding: 0.7rem 0.9rem;
+    outline: none;
+  }
+
+  #countryInput:focus { border-color: #555; }
+
+  #findBtn {
+    font-family: 'Roboto', sans-serif;
+    font-size: 1rem;
+    padding: 0.7rem 1.25rem;
+    background: #fff;
+    color: #000;
+    border: none;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+
+  #findBtn:hover { background: #ddd; }
+  #findBtn:disabled { background: #2a2a2a; color: #444; cursor: not-allowed; }
+
+  #cancelBtn {
+    font-family: 'Roboto', sans-serif;
+    font-size: 0.85rem;
+    padding: 0.7rem 1rem;
+    background: transparent;
+    color: #444;
+    border: 1px solid #2a2a2a;
+    cursor: pointer;
+    display: none;
+  }
+
+  #cancelBtn:hover { color: #aaa; border-color: #555; }
+
+  /* Dropdown */
+  .dropdown {
+    position: absolute;
+    top: calc(100% + 2px);
+    left: 0;
+    right: 0;
+    background: #1a1a1a;
+    border: 1px solid #333;
+    border-top: none;
+    max-height: 260px;
+    overflow-y: auto;
+    z-index: 100;
+    display: none;
+  }
+
+  .dropdown.open { display: block; }
+
+  .dropdown-item {
+    padding: 0.55rem 0.9rem;
+    cursor: pointer;
+    font-size: 0.9rem;
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    color: #aaa;
+  }
+
+  .dropdown-item:hover,
+  .dropdown-item.active { background: #222; color: #fff; }
+
+  .dropdown-item .flag { font-size: 1.1rem; line-height: 1; }
+
+  /* Progress */
+  .progress {
+    width: 100%;
+    max-width: 420px;
+    height: 2px;
+    background: #1a1a1a;
+    margin-bottom: 0.5rem;
+    overflow: hidden;
+  }
+
+  .progress-bar {
+    height: 100%;
+    width: 0%;
+    background: #fff;
+    transition: width 0.2s ease;
+  }
+
+  .progress.indeterminate .progress-bar {
+    width: 30%;
+    animation: slide 1.2s ease-in-out infinite;
+  }
+
+  @keyframes slide {
+    0%   { transform: translateX(-100%); }
+    100% { transform: translateX(333%); }
+  }
+
+  #status {
+    font-size: 0.72rem;
+    color: #444;
+    min-height: 1rem;
+    width: 100%;
+    max-width: 420px;
+    margin-bottom: 2rem;
+  }
+
+  /* Result card */
+  #result {
+    width: 100%;
+    max-width: 420px;
+    background: #1a1a1a;
+    padding: 1.75rem 2rem;
+    margin-bottom: 2.5rem;
+    display: none;
+    flex-direction: column;
+    gap: 1.5rem;
+  }
+
+  #result.visible { display: flex; }
+
+  .result-header {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+
+  .result-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+  }
+
+  .result-label {
+    font-size: 0.7rem;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: #444;
+  }
+
+  #result-title {
+    font-size: 1.2rem;
+    color: #fff;
+  }
+
+  #confidence {
+    font-size: 0.75rem;
+    font-weight: 500;
+    padding: 0.25rem 0.5rem;
+    letter-spacing: 0.05em;
+    flex-shrink: 0;
+    margin-top: 0.1rem;
+    position: relative;
+    cursor: default;
+  }
+
+  #confidence .tooltip {
+    display: none;
+    position: absolute;
+    top: calc(100% + 6px);
+    right: 0;
+    width: 220px;
+    background: #222;
+    border: 1px solid #333;
+    color: #aaa;
+    font-size: 0.72rem;
+    font-weight: 400;
+    line-height: 1.5;
+    padding: 0.6rem 0.75rem;
+    z-index: 10;
+    pointer-events: none;
+  }
+
+  #confidence:hover .tooltip { display: block; }
+
+  #result-coords {
+    font-size: 0.8rem;
+    color: #444;
+  }
+
+  .result-links {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .result-links a {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    background: #222;
+    color: #aaa;
+    text-decoration: none;
+    font-size: 0.85rem;
+    border: 1px solid #2a2a2a;
+  }
+
+  .result-links a:hover { background: #2a2a2a; color: #fff; border-color: #444; }
+
+  .result-links a svg {
+    width: 0.9rem;
+    height: 0.9rem;
+    opacity: 0.5;
+  }
+
+  /* History */
+  #history-label {
+    font-size: 0.65rem;
+    color: #2a2a2a;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    width: 100%;
+    max-width: 420px;
+    margin-bottom: 0.4rem;
+    display: none;
+  }
+
+  #history {
+    width: 100%;
+    max-width: 420px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
+  .hist-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.4rem 0.75rem;
+    background: #161616;
+    font-size: 0.72rem;
+    color: #333;
+    gap: 1rem;
+  }
+
+  .hist-links { display: flex; gap: 0.5rem; flex-shrink: 0; }
+
+  .hist-links a {
+    color: #2a2a2a;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+  }
+
+  .hist-links a:hover { color: #666; }
+  .hist-links svg { width: 0.8rem; height: 0.8rem; }
+</style>
+</head>
+<body>
+
+<h1>Alley Finder</h1>
+
+<div class="search-wrap" id="searchWrap">
+  <div class="search-row">
+    <input type="text" id="countryInput" placeholder="Search country..." autocomplete="off" />
+    <button id="findBtn" onclick="findAlley()">Find alley</button>
+    <button id="cancelBtn" onclick="cancelSearch()">Cancel</button>
+  </div>
+  <div class="dropdown" id="dropdown"></div>
+</div>
+
+<div class="progress" id="progress"><div class="progress-bar" id="progressBar"></div></div>
+<div id="status"></div>
+
+<div id="result">
+  <div class="result-header">
+    <div class="result-top">
+      <div class="result-label">Alley Found</div>
+      <div id="confidence"><span class="tooltip">How likely this is a good GeoGuessr alley location. Based on how far Street View snapped from the alley (closer is better), whether it has a proper alley tag in OpenStreetMap, and how short and enclosed the way is.</span></div>
+    </div>
+    <div id="result-title"></div>
+    <div id="result-coords"></div>
+  </div>
+  <div class="result-links">
+    <a id="result-sv" href="#" target="_blank">
+      View in Street View
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+    </a>
+    <a id="result-map" href="#" target="_blank">
+      View on Google Maps
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+    </a>
+  </div>
+</div>
+
+<div id="history-label">Previous</div>
+<div id="history"></div>
+
+<script>
+const COUNTRIES = [
+  { flag: '🇮🇩', name: 'Indonesia' },
+  { flag: '🇲🇽', name: 'Mexico' },
+  { flag: '🇪🇸', name: 'Spain' },
+  { flag: '🇵🇹', name: 'Portugal' },
+  { flag: '🇵🇭', name: 'Philippines' },
+  { flag: '🇮🇳', name: 'India' },
+  { flag: '🇱🇰', name: 'Sri Lanka' },
+  { flag: '🇯🇵', name: 'Japan' },
+  { flag: '🇵🇪', name: 'Peru' },
+  { flag: '🇲🇹', name: 'Malta' },
+  { flag: '🇨🇾', name: 'Cyprus' },
+  { flag: '🇮🇪', name: 'Ireland' },
+  { flag: '🇪🇨', name: 'Ecuador' },
+  { flag: '🇧🇬', name: 'Bulgaria' },
+  { flag: '🇧🇦', name: 'Bosnia and Herzegovina' },
+  { flag: '🇻🇳', name: 'Vietnam' },
+  { flag: '🇹🇷', name: 'Turkey' },
+  { flag: '🇬🇷', name: 'Greece' },
+  { flag: '🇨🇱', name: 'Chile' },
+  { flag: '🇸🇳', name: 'Senegal' },
+  { flag: '🇰🇿', name: 'Kazakhstan' },
+  { flag: '🇰🇷', name: 'South Korea' },
+  { flag: '🇨🇷', name: 'Costa Rica' },
+  { flag: '🇳🇵', name: 'Nepal' },
+  { flag: '🇳🇱', name: 'Netherlands' },
+  { flag: '🇸🇮', name: 'Slovenia' },
+  { flag: '🇷🇺', name: 'Russia' },
+  { flag: '🇧🇹', name: 'Bhutan' },
+  { flag: '🇹🇳', name: 'Tunisia' },
+  { flag: '🇱🇧', name: 'Lebanon' },
+  { flag: '🇫🇮', name: 'Finland' },
+  { flag: '🇭🇷', name: 'Croatia' },
+  { flag: '🇰🇬', name: 'Kyrgyzstan' },
+  { flag: '🇵🇷', name: 'Puerto Rico' },
+  { flag: '🇬🇺', name: 'Guam' },
+  { flag: '🇲🇵', name: 'Northern Mariana Islands', searchAs: 'Saipan' },
+  { flag: '🇮🇲', name: 'Isle of Man' },
+  { flag: '🇯🇪', name: 'Jersey' },
+  { flag: '🇺🇸', name: 'USA' },
+];
+
+
+const OVERPASS_MIRRORS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
+  'https://overpass.kumi.systems/api/interpreter',
+];
+
+let currentController = null;
+let timerInterval = null;
+let cachedArea = null; // { key, ways }
+let selectedCountry = null;
+let activeIndex = -1;
+
+// ── Dropdown ──────────────────────────────────────────────────────────────
+
+function renderDropdown(filter) {
+  const dd = document.getElementById('dropdown');
+  const items = filter
+    ? COUNTRIES.filter(c => c.name.toLowerCase().includes(filter.toLowerCase()))
+    : COUNTRIES;
+
+  if (!items.length) { dd.classList.remove('open'); return; }
+
+  dd.innerHTML = items.map((c, i) =>
+    `<div class="dropdown-item" data-name="${c.name}" data-index="${i}">
+      <span class="flag">${c.flag}</span>
+      <span>${c.name}</span>
+    </div>`
+  ).join('');
+
+  dd.querySelectorAll('.dropdown-item').forEach(el => {
+    el.addEventListener('mousedown', e => {
+      e.preventDefault();
+      selectCountry(COUNTRIES.find(c => c.name === el.dataset.name));
+    });
+  });
+
+  activeIndex = -1;
+  dd.classList.add('open');
+}
+
+function selectCountry(entry) {
+  selectedCountry = entry;
+  document.getElementById('countryInput').value = entry.flag + '  ' + entry.name;
+  document.getElementById('dropdown').classList.remove('open');
+}
+
+document.getElementById('countryInput').addEventListener('focus', () => {
+  const val = document.getElementById('countryInput').value.trim();
+  renderDropdown(val ? extractName(val) : '');
+});
+
+document.getElementById('countryInput').addEventListener('input', e => {
+  const raw = e.target.value;
+  selectedCountry = null;
+  renderDropdown(extractName(raw));
+});
+
+document.getElementById('countryInput').addEventListener('keydown', e => {
+  const dd = document.getElementById('dropdown');
+  const items = dd.querySelectorAll('.dropdown-item');
+  if (e.key === 'ArrowDown') {
+    e.preventDefault();
+    activeIndex = Math.min(activeIndex + 1, items.length - 1);
+    items.forEach((el, i) => el.classList.toggle('active', i === activeIndex));
+    items[activeIndex]?.scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'ArrowUp') {
+    e.preventDefault();
+    activeIndex = Math.max(activeIndex - 1, 0);
+    items.forEach((el, i) => el.classList.toggle('active', i === activeIndex));
+    items[activeIndex]?.scrollIntoView({ block: 'nearest' });
+  } else if (e.key === 'Enter') {
+    if (activeIndex >= 0 && items[activeIndex]) {
+      const name = items[activeIndex].dataset.name;
+      selectCountry(COUNTRIES.find(c => c.name === name));
+    } else {
+      dd.classList.remove('open');
+      findAlley();
+    }
+  } else if (e.key === 'Escape') {
+    dd.classList.remove('open');
+  }
+});
+
+document.addEventListener('click', e => {
+  if (!document.getElementById('searchWrap').contains(e.target))
+    document.getElementById('dropdown').classList.remove('open');
+});
+
+function extractName(val) {
+  // Strip leading emoji/whitespace
+  return val.replace(/^[\p{Emoji}\s]+/u, '').trim();
+}
+
+// ── Progress / Status ─────────────────────────────────────────────────────
+
+function setProgress(pct, indeterminate = false) {
+  const wrap = document.getElementById('progress');
+  const bar = document.getElementById('progressBar');
+  if (indeterminate) {
+    wrap.classList.add('indeterminate');
+    bar.style.width = '';
+  } else {
+    wrap.classList.remove('indeterminate');
+    bar.style.width = pct + '%';
+  }
+}
+
+function startTimer(labelFn) {
+  stopTimer();
+  const start = Date.now();
+  timerInterval = setInterval(() => {
+    document.getElementById('status').textContent = labelFn(((Date.now() - start) / 1000).toFixed(1));
+  }, 100);
+}
+
+function stopTimer() { clearInterval(timerInterval); timerInterval = null; }
+function setStatus(t) { stopTimer(); document.getElementById('status').textContent = t; }
+
+// ── Network ───────────────────────────────────────────────────────────────
+
+function mergedSignal(userSignal, ms) {
+  const tc = new AbortController();
+  const t = setTimeout(() => tc.abort(new DOMException('Timeout', 'TimeoutError')), ms);
+  userSignal.addEventListener('abort', () => { clearTimeout(t); tc.abort(userSignal.reason); });
+  return tc.signal;
+}
+
+async function overpassFetch(query, signal) {
+  const body = 'data=' + encodeURIComponent(query);
+  let lastErr;
+  for (const mirror of OVERPASS_MIRRORS) {
+    const s = mergedSignal(signal, 60_000);
+    try {
+      const r = await fetch(mirror, { method: 'POST', body, signal: s });
+      if (r.status === 429 || r.status === 503) continue;
+      if (r.ok) return r.json();
+    } catch (e) {
+      if (e.name === 'AbortError' && signal.aborted) throw e;
+      lastErr = (e.name === 'TimeoutError' || e.name === 'AbortError')
+        ? new Error('Request timed out — try a smaller country or retry')
+        : e;
+    }
+  }
+  throw lastErr || new Error('All mirrors failed — try again in a moment');
+}
+
+async function resolveCountryBbox(query, signal) {
+  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5`;
+  const r = await fetch(url, { headers: { 'Accept': 'application/json' }, signal });
+  if (!r.ok) return null;
+  const data = await r.json();
+  const hit = data.find(d => d.osm_type === 'relation') || data[0];
+  if (!hit?.boundingbox) return null;
+  const [s, n, w, e] = hit.boundingbox.map(Number);
+  const areaId = hit.osm_type === 'relation' ? 3600000000 + Number(hit.osm_id)
+               : hit.osm_type === 'way'      ? 2400000000 + Number(hit.osm_id)
+               : null;
+  return { s, n, w, e, areaId };
+}
+
+async function fetchCityNodes(areaId, signal) {
+  const query = `[out:json][timeout:60];area(${areaId})->.a;(node["place"~"^(city|town|suburb)$"](area.a););out 300;`;
+  const data = await overpassFetch(query, signal);
+  return data.elements.filter(e => e.type === 'node' && e.lat != null && e.lon != null);
+}
+
+// JSONP call to Google's GeoPhotoService — no CORS issues, no API key needed.
+function svLookup(lat, lng, radius) {
+  return new Promise(resolve => {
+    const cb = '_sv_' + Date.now();
+    const timer = setTimeout(() => { cleanup(); resolve(null); }, 5000);
+    function cleanup() { clearTimeout(timer); delete window[cb]; script.remove(); }
+    window[cb] = data => {
+      cleanup();
+      try {
+        console.log('[SV raw]', JSON.stringify(data).slice(0, 400));
+        // Response: [[null, [[[panoId, "", null, [lat, lng], ...]]]]] or [[null, []]] if none
+        const hit = data?.[1]?.[1]?.[0];
+        if (!hit) { console.log('[SV] no hit'); return resolve(null); }
+        const panoId = hit[0]?.[0];
+        const panoLat = hit[2]?.[0]?.[2]?.[0] ?? hit[0]?.[2]?.[0];
+        const panoLng = hit[2]?.[0]?.[2]?.[1] ?? hit[0]?.[2]?.[1];
+        console.log('[SV] panoId', panoId, 'lat', panoLat, 'lng', panoLng);
+        if (panoId && panoLat != null) resolve({ panoId, lat: +panoLat.toFixed(6), lng: +panoLng.toFixed(6) });
+        else resolve(null);
+      } catch(e) { console.log('[SV] parse error', e); resolve(null); }
+    };
+    const script = Object.assign(document.createElement('script'), {
+      src: `https://maps.googleapis.com/maps/api/js/GeoPhotoService.SingleImageSearch?pb=!1m5!1sapiv3!5sUS!11m2!1m1!1b0!2m4!1m2!3d${lat}!4d${lng}!2d${radius}!3m4!2m2!1sen!2sUS!4m6!1e1!1e2!1e3!1e4!1e8!1e6&callback=${cb}`,
+      onerror: () => { cleanup(); resolve(null); },
+    });
+    document.head.appendChild(script);
+  });
+}
+
+async function findNearestPano(lat, lng) {
+  for (let radius = 25; radius <= 50000; radius = Math.round(radius * 2)) {
+    const pano = await svLookup(lat, lng, radius);
+    if (pano) return pano;
+  }
+  return null;
+}
+
+function buildAroundQuery(lat, lon, fallback = false) {
+  const r = 8000;
+  const roads = fallback
+    ? `way["highway"="service"](around:${r},${lat},${lon});\n  way["highway"="living_street"](around:${r},${lat},${lon});`
+    : `way["highway"="service"]["service"="alley"](around:${r},${lat},${lon});`;
+  return `[out:json][timeout:30];\n(\n  ${roads}\n);\nout geom;`;
+}
+
+function haversine(lat1, lon1, lat2, lon2) {
+  const R = 6371000, rad = Math.PI / 180;
+  const dLat = (lat2 - lat1) * rad, dLon = (lon2 - lon1) * rad;
+  const a = Math.sin(dLat/2)**2 + Math.cos(lat1*rad) * Math.cos(lat2*rad) * Math.sin(dLon/2)**2;
+  return R * 2 * Math.asin(Math.sqrt(a));
+}
+
+function wayLengthM(nodes) {
+  let len = 0;
+  for (let i = 0; i < nodes.length - 1; i++)
+    len += haversine(nodes[i].lat, nodes[i].lon, nodes[i+1].lat, nodes[i+1].lon);
+  return len;
+}
+
+function calcConfidence(alleyLat, alleyLng, panoLat, panoLng, isAlleyTag, wayNodes) {
+  const dist = haversine(alleyLat, alleyLng, panoLat, panoLng);
+  // Distance: primary factor
+  let score = dist < 10  ? 100
+            : dist < 25  ? 92
+            : dist < 50  ? 82
+            : dist < 100 ? 68
+            : dist < 250 ? 48
+            : dist < 500 ? 28
+            : 10;
+  // Proper alley tag vs fallback service road
+  if (!isAlleyTag) score -= 15;
+  // Way length: short enclosed alleys score better
+  const len = wayLengthM(wayNodes);
+  if (len < 40)  score += 5;
+  else if (len > 400) score -= 8;
+  return Math.max(0, Math.min(100, Math.round(score)));
+}
+
+function confidenceColor(pct) {
+  if (pct >= 75) return '#4ade80';
+  if (pct >= 50) return '#facc15';
+  if (pct >= 25) return '#fb923c';
+  return '#f87171';
+}
+
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+function samplePoint(nodes) {
+  if (nodes.length < 2) return [nodes[0].lat, nodes[0].lon];
+  let totalLen = 0;
+  const segs = [];
+  for (let i = 0; i < nodes.length - 1; i++) {
+    const dl = nodes[i+1].lat - nodes[i].lat, dn = nodes[i+1].lon - nodes[i].lon;
+    const len = Math.sqrt(dl*dl + dn*dn);
+    segs.push({ len, a: nodes[i], b: nodes[i+1] });
+    totalLen += len;
+  }
+  let r = Math.random() * totalLen, cum = 0;
+  for (const s of segs) {
+    cum += s.len;
+    if (r <= cum) { const t = Math.random(); return [lerp(s.a.lat,s.b.lat,t), lerp(s.a.lon,s.b.lon,t)]; }
+  }
+  return [nodes.at(-1).lat, nodes.at(-1).lon];
+}
+
+// ── UI ────────────────────────────────────────────────────────────────────
+
+function cancelSearch() {
+  if (currentController) currentController.abort();
+  stopTimer(); setProgress(0); setStatus('Cancelled.');
+  document.getElementById('findBtn').disabled = false;
+  document.getElementById('cancelBtn').style.display = 'none';
+}
+
+function pushHistory(title, lat, lng) {
+  const svUrl  = `https://www.google.com/maps/@${lat},${lng},3a,75y,90h,90t/data=!3m6!1e1!3m4!1s!2e0!7i16384!8i8192`;
+  const mapUrl = `https://www.google.com/maps?q=${lat},${lng}`;
+  const label  = document.getElementById('history-label');
+  const hist   = document.getElementById('history');
+  const div    = document.createElement('div');
+  div.className = 'hist-item';
+  div.innerHTML = `
+    <span>${title} &nbsp; ${lat}, ${lng}</span>
+    <span class="hist-links">
+      <a href="${svUrl}" target="_blank" title="Street View">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 22 L8 2 L16 2 L21 22"/><line x1="12" y1="4" x2="12" y2="8"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="12" y1="20" x2="12" y2="22"/></svg>
+      </a>
+      <a href="${mapUrl}" target="_blank" title="Map">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 6-9 13-9 13s-9-7-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+      </a>
+    </span>`;
+  hist.insertBefore(div, hist.firstChild);
+  while (hist.children.length > 10) hist.lastChild.remove();
+  label.style.display = '';
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────
+
+async function findAlley() {
+  const entry = selectedCountry || (() => {
+    const raw = extractName(document.getElementById('countryInput').value.trim());
+    return raw ? COUNTRIES.find(c => c.name.toLowerCase() === raw.toLowerCase()) || { name: raw } : null;
+  })();
+  if (!entry) return;
+
+  // Push previous result to history
+  if (document.getElementById('result').classList.contains('visible')) {
+    pushHistory(
+      document.getElementById('result-title').textContent,
+      ...document.getElementById('result-coords').textContent.split(', ')
+    );
+  }
+
+  currentController = new AbortController();
+  const { signal } = currentController;
+  document.getElementById('findBtn').disabled = true;
+  document.getElementById('cancelBtn').style.display = '';
+  setProgress(0, true);
+
+  try {
+    const searchQuery = entry.searchAs || entry.name;
+    const displayName = entry.name;
+    const cacheKey = entry.name;
+
+    if (!cachedArea || cachedArea.key !== cacheKey) {
+      startTimer(s => `Locating ${displayName}... ${s}s`);
+      const bbox = await resolveCountryBbox(searchQuery, signal);
+      if (!bbox) {
+        setStatus(`Couldn't find "${entry.name}" — try checking the spelling.`);
+        setProgress(0);
+        document.getElementById('findBtn').disabled = false;
+        document.getElementById('cancelBtn').style.display = 'none';
+        return;
+      }
+      startTimer(s => `Loading cities in ${displayName}... ${s}s`);
+      const cityNodes = await fetchCityNodes(bbox.areaId, signal);
+      cachedArea = { key: cacheKey, bbox, cityNodes, displayName };
+    }
+
+    const { cityNodes } = cachedArea;
+    if (!cityNodes.length) {
+      setStatus(`No city data found for "${entry.name}".`);
+      setProgress(0);
+      document.getElementById('findBtn').disabled = false;
+      document.getElementById('cancelBtn').style.display = 'none';
+      return;
+    }
+
+    let ways = [], isAlleyTag = false;
+    const MAX_TRIES = 6;
+    for (let attempt = 1; attempt <= MAX_TRIES; attempt++) {
+      const city = cityNodes[Math.floor(Math.random() * cityNodes.length)];
+      const cityName = city.tags?.name || 'city';
+      startTimer(s => `Searching ${cityName}${attempt > 1 ? ` (attempt ${attempt})` : ''}... ${s}s`);
+      let data = await overpassFetch(buildAroundQuery(city.lat, city.lon), signal);
+      ways = data.elements.filter(e => e.type === 'way' && e.geometry?.length >= 2);
+      if (ways.length) { isAlleyTag = true; break; }
+      data = await overpassFetch(buildAroundQuery(city.lat, city.lon, true), signal);
+      ways = data.elements.filter(e => e.type === 'way' && e.geometry?.length >= 2);
+      if (ways.length) { isAlleyTag = false; break; }
+    }
+
+    stopTimer();
+
+    if (!ways.length) {
+      setStatus(`No alleys found after ${MAX_TRIES} attempts — try again.`);
+      setProgress(0);
+      document.getElementById('findBtn').disabled = false;
+      document.getElementById('cancelBtn').style.display = 'none';
+      return;
+    }
+
+    const way = ways[Math.floor(Math.random() * ways.length)];
+    const [lat, lng] = samplePoint(way.geometry);
+    const loc = { lat: +lat.toFixed(6), lng: +lng.toFixed(6) };
+    const title = cachedArea.displayName;
+
+    setStatus('Finding nearest Street View...');
+    const pano = await findNearestPano(loc.lat, loc.lng);
+    const svLat  = pano ? pano.lat  : loc.lat;
+    const svLng  = pano ? pano.lng  : loc.lng;
+    const svHref = pano
+      ? `https://www.google.com/maps/@?api=1&map_action=pano&pano=${pano.panoId}`
+      : `https://www.google.com/maps/@${svLat},${svLng},3a,75y,90h,90t/data=!3m6!1e1!3m4!1s!2e0!7i16384!8i8192`;
+
+    const confEl = document.getElementById('confidence');
+    const tooltip = confEl.querySelector('.tooltip');
+    if (pano) {
+      const pct = calcConfidence(loc.lat, loc.lng, pano.lat, pano.lng, isAlleyTag, way.geometry);
+      const color = confidenceColor(pct);
+      confEl.childNodes[0]?.nodeType === 3 && confEl.childNodes[0].remove();
+      confEl.insertBefore(document.createTextNode(pct + '%'), tooltip);
+      confEl.style.color = color;
+      confEl.style.borderBottom = `2px solid ${color}`;
+    } else {
+      confEl.childNodes[0]?.nodeType === 3 && confEl.childNodes[0].remove();
+      confEl.style.borderBottom = 'none';
+      confEl.style.color = '';
+    }
+
+    document.getElementById('result-title').textContent = title;
+    document.getElementById('result-coords').textContent = `${svLat}, ${svLng}`;
+    document.getElementById('result-sv').href  = svHref;
+    document.getElementById('result-map').href = `https://www.google.com/maps?q=${svLat},${svLng}`;
+    document.getElementById('result').classList.add('visible');
+
+    setStatus('');
+    setProgress(100);
+    setTimeout(() => setProgress(0), 400);
+
+  } catch (err) {
+    stopTimer();
+    if (err.name !== 'AbortError') { setStatus('Error: ' + err.message); setProgress(0); }
+  }
+
+  document.getElementById('findBtn').disabled = false;
+  document.getElementById('cancelBtn').style.display = 'none';
+  currentController = null;
+}
+</script>
+</body>
+</html>
