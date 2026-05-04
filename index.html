@@ -780,7 +780,7 @@ async function findNearestPano(lat, lng) {
   return null;
 }
 
-const CITY_CACHE_VERSION = 1;
+const CITY_CACHE_VERSION = 2;
 const CITY_CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 function loadCityCache(key) {
@@ -801,11 +801,21 @@ function saveCityCache(key, data) {
 }
 
 async function fetchCityNodes(bbox, signal) {
-  // city only (drop town) for faster country-wide scans on big countries.
   const { s, w, n, e } = bbox;
-  const query = `[out:json][timeout:10];node["place"="city"](${s},${w},${n},${e});out 150;`;
-  const data = await overpassFetch(query, signal);
-  return data.elements.filter(el => el.lat != null && el.lon != null);
+  // Handle antimeridian wraparound (e.g. United States bbox includes Aleutians,
+  // making w > e). Overpass needs w < e, so split into two queries.
+  const ranges = (w > e)
+    ? [{ s, w, n, e: 180 }, { s, w: -180, n, e }]
+    : [{ s, w, n, e }];
+  const seen = new Map();
+  for (const r of ranges) {
+    const query = `[out:json][timeout:15];node["place"~"^(city|town)$"](${r.s},${r.w},${r.n},${r.e});out 250;`;
+    const data = await overpassFetch(query, signal);
+    for (const el of data.elements) {
+      if (el.lat != null && el.lon != null) seen.set(el.id, el);
+    }
+  }
+  return [...seen.values()];
 }
 
 function buildAroundQuery(lat, lon) {
