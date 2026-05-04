@@ -479,7 +479,7 @@ const COUNTRIES = [
   { flag: '🇺🇾', name: 'Uruguay' },
   { flag: '🇵🇾', name: 'Paraguay' },
   { flag: '🇨🇱', name: 'Chile' },
-  { flag: '🇺🇸', name: 'United States' },
+  { flag: '🇺🇸', name: 'United States', bboxOverride: { s: 24.52, w: -124.77, n: 49.38, e: -66.95 } },
   { flag: '🇬🇺', name: 'Guam' },
   { flag: '🇲🇵', name: 'Northern Mariana Islands', bboxOverride: { s: 15.10, w: 145.62, n: 15.33, e: 145.83 } },
   { flag: '🇨🇦', name: 'Canada' },
@@ -780,7 +780,7 @@ async function findNearestPano(lat, lng) {
   return null;
 }
 
-const CITY_CACHE_VERSION = 2;
+const CITY_CACHE_VERSION = 3;
 const CITY_CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 function loadCityCache(key) {
@@ -802,11 +802,20 @@ function saveCityCache(key, data) {
 
 async function fetchCityNodes(bbox, signal) {
   const { s, w, n, e } = bbox;
-  // Handle antimeridian wraparound (e.g. United States bbox includes Aleutians,
-  // making w > e). Overpass needs w < e, so split into two queries.
-  const ranges = (w > e)
-    ? [{ s, w, n, e: 180 }, { s, w: -180, n, e }]
-    : [{ s, w, n, e }];
+  // Handle countries crossing the antimeridian. Two cases:
+  //   1. w > e (proper wraparound from Nominatim).
+  //   2. w < e but spans ~360° longitude (Nominatim sometimes returns
+  //      [-180, 180] for countries with far-flung territories like the US,
+  //      Russia, NZ, Fiji, Kiribati).
+  let ranges;
+  if (w > e) {
+    ranges = [{ s, w, n, e: 180 }, { s, w: -180, n, e }];
+  } else if (e - w > 180) {
+    const mid = (w + e) / 2;
+    ranges = [{ s, w, n, e: mid }, { s, w: mid, n, e }];
+  } else {
+    ranges = [{ s, w, n, e }];
+  }
   const seen = new Map();
   for (const r of ranges) {
     const query = `[out:json][timeout:15];node["place"~"^(city|town)$"](${r.s},${r.w},${r.n},${r.e});out 250;`;
