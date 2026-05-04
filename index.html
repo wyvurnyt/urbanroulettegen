@@ -703,14 +703,41 @@ async function overpassFetch(query, signal) {
   throw lastErr || new Error('All mirrors failed — try again in a moment');
 }
 
+function loadBboxCache(name) {
+  try {
+    const raw = localStorage.getItem('bboxCache:' + name);
+    if (!raw) return null;
+    const obj = JSON.parse(raw);
+    if (Date.now() - obj.t > 30 * 24 * 60 * 60 * 1000) return null; // 30 days
+    return obj.bbox;
+  } catch { return null; }
+}
+function saveBboxCache(name, bbox) {
+  try { localStorage.setItem('bboxCache:' + name, JSON.stringify({ t: Date.now(), bbox })); } catch {}
+}
+
 async function resolveCountryBbox(name, signal) {
-  // Query the relation directly — area elements don't support "out bb".
-  const query = `[out:json][timeout:15];rel["name:en"="${name}"]["admin_level"="2"];out bb 1;`;
-  const data = await overpassFetch(query, signal);
-  const rel = data?.elements?.[0];
-  if (!rel?.bounds) return null;
-  const { minlat: s, minlon: w, maxlat: n, maxlon: e } = rel.bounds;
-  return { s, w, n, e };
+  const cached = loadBboxCache(name);
+  if (cached) return cached;
+
+  // Nominatim is purpose-built for geocoding and resolves a country bbox in
+  // ~200-500ms, vs Overpass admin_level=2 lookups which often take 10-30s.
+  const url = `https://nominatim.openstreetmap.org/search?country=${encodeURIComponent(name)}&format=json&limit=1`;
+  const s = mergedSignal(signal, 15_000);
+  try {
+    const r = await fetch(url, { signal: s, headers: { 'Accept': 'application/json' } });
+    if (!r.ok) return null;
+    const arr = await r.json();
+    const hit = arr?.[0];
+    if (!hit?.boundingbox) return null;
+    const [minlat, maxlat, minlon, maxlon] = hit.boundingbox.map(parseFloat);
+    const bbox = { s: minlat, w: minlon, n: maxlat, e: maxlon };
+    saveBboxCache(name, bbox);
+    return bbox;
+  } catch (e) {
+    if (e.name === 'AbortError' && signal.aborted) throw e;
+    return null;
+  }
 }
 
 
