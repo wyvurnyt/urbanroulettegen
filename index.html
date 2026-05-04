@@ -753,17 +753,37 @@ async function findNearestPano(lat, lng) {
   return null;
 }
 
+const CITY_CACHE_VERSION = 1;
+const CITY_CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+function loadCityCache(key) {
+  try {
+    const raw = localStorage.getItem('cityCache:' + key);
+    if (!raw) return null;
+    const obj = JSON.parse(raw);
+    if (obj.v !== CITY_CACHE_VERSION) return null;
+    if (Date.now() - obj.t > CITY_CACHE_TTL) return null;
+    return obj.data;
+  } catch { return null; }
+}
+
+function saveCityCache(key, data) {
+  try {
+    localStorage.setItem('cityCache:' + key, JSON.stringify({ v: CITY_CACHE_VERSION, t: Date.now(), data }));
+  } catch {}
+}
+
 async function fetchCityNodes(bbox, signal) {
-  // Lightweight bbox query — just place nodes, no geometry, fast even for India/Brazil.
+  // city only (drop town) for faster country-wide scans on big countries.
   const { s, w, n, e } = bbox;
-  const query = `[out:json][timeout:20];node["place"~"^(city|town)$"](${s},${w},${n},${e});out 300;`;
+  const query = `[out:json][timeout:10];node["place"="city"](${s},${w},${n},${e});out 150;`;
   const data = await overpassFetch(query, signal);
   return data.elements.filter(el => el.lat != null && el.lon != null);
 }
 
 function buildAroundQuery(lat, lon) {
   const r = 5000;
-  return `[out:json][timeout:20];(way["highway"="service"]["service"="alley"](around:${r},${lat},${lon});way["highway"="service"](around:${r},${lat},${lon});way["highway"="living_street"](around:${r},${lat},${lon}););out 100 geom tags;`;
+  return `[out:json][timeout:10];(way["highway"="service"]["service"="alley"](around:${r},${lat},${lon});way["highway"="service"](around:${r},${lat},${lon});way["highway"="living_street"](around:${r},${lat},${lon}););out 100 geom tags;`;
 }
 
 function haversine(lat1, lon1, lat2, lon2) {
@@ -898,8 +918,12 @@ async function findAlley() {
           return;
         }
       }
-      startTimer(s => `Loading cities in ${displayName}... ${s}s`);
-      const cityNodes = await fetchCityNodes(bbox, signal);
+      let cityNodes = loadCityCache(cacheKey);
+      if (!cityNodes) {
+        startTimer(s => `Loading cities in ${displayName}... ${s}s`);
+        cityNodes = await fetchCityNodes(bbox, signal);
+        saveCityCache(cacheKey, cityNodes);
+      }
       cachedArea = { key: cacheKey, bbox, cityNodes, displayName };
     }
 
@@ -917,18 +941,35 @@ async function findAlley() {
 
     // Track tried cities to avoid repeating empty ones
     const triedCities = new Set();
+    const pickCity = () => {
+      const untried = [];
+      for (let i = 0; i < cityNodes.length; i++) if (!triedCities.has(i)) untried.push(i);
+      if (!untried.length) return null;
+      const idx = untried[Math.floor(Math.random() * untried.length)];
+      triedCities.add(idx);
+      return { idx, city: cityNodes[idx] };
+    };
+    const startCityFetch = () => {
+      const pick = pickCity();
+      if (!pick) return null;
+      return {
+        name: pick.city.tags?.name || 'city',
+        promise: overpassFetch(buildAroundQuery(pick.city.lat, pick.city.lon), signal),
+      };
+    };
 
-    for (let attempt = 1; attempt <= MAX_TRIES; attempt++) {
-      // Pick a random untried city node
-      const untried = cityNodes.filter((_, i) => !triedCities.has(i));
-      if (!untried.length) break; // exhausted all cities
-      const cityIdx = cityNodes.indexOf(untried[Math.floor(Math.random() * untried.length)]);
-      triedCities.add(cityIdx);
-      const city = cityNodes[cityIdx];
-      const cityName = city.tags?.name || 'city';
+    // Prefetch the next city's query while processing the current one
+    let current = startCityFetch();
+    let next = startCityFetch();
 
+    for (let attempt = 1; attempt <= MAX_TRIES && current; attempt++) {
+      const cityName = current.name;
       startTimer(s => `Searching ${cityName}${attempt > 1 ? ` (attempt ${attempt})` : ''}... ${s}s`);
-      const data = await overpassFetch(buildAroundQuery(city.lat, city.lon), signal);
+      let data;
+      try { data = await current.promise; }
+      catch (e) { current = next; next = startCityFetch(); if (e.name === 'AbortError') throw e; continue; }
+      current = next;
+      next = startCityFetch();
       ways = data.elements.filter(e => e.type === 'way' && e.geometry?.length >= 2);
       if (ways.length < 3) continue;
 
