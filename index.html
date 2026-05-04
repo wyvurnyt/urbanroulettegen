@@ -753,23 +753,17 @@ async function findNearestPano(lat, lng) {
   return null;
 }
 
-function buildBboxQuery(s, w, n, e) {
-  // Query a bbox patch directly — no city lookup needed.
-  // Returns proper alleys + fallback service/living_street ways.
-  return `[out:json][timeout:25];(way["highway"="service"]["service"="alley"](${s},${w},${n},${e});way["highway"="service"](${s},${w},${n},${e});way["highway"="living_street"](${s},${w},${n},${e}););out 50 geom tags;`;
+async function fetchCityNodes(bbox, signal) {
+  // Lightweight bbox query — just place nodes, no geometry, fast even for India/Brazil.
+  const { s, w, n, e } = bbox;
+  const query = `[out:json][timeout:20];node["place"~"^(city|town)$"](${s},${w},${n},${e});out 300;`;
+  const data = await overpassFetch(query, signal);
+  return data.elements.filter(el => el.lat != null && el.lon != null);
 }
 
-// Pick a random sub-patch within country bounds.
-// Patch size ~0.4° (~40 km) — big enough to find roads, small enough to not time out.
-function randomPatch(bbox) {
-  const SIZE = 0.4;
-  const latRange = bbox.n - bbox.s;
-  const lonRange = bbox.e - bbox.w;
-  // If country is smaller than patch, just use its full bbox
-  if (latRange <= SIZE && lonRange <= SIZE) return bbox;
-  const s = bbox.s + Math.random() * Math.max(0, latRange - SIZE);
-  const w = bbox.w + Math.random() * Math.max(0, lonRange - SIZE);
-  return { s, w, n: s + Math.min(SIZE, latRange), e: w + Math.min(SIZE, lonRange) };
+function buildAroundQuery(lat, lon) {
+  const r = 5000;
+  return `[out:json][timeout:20];(way["highway"="service"]["service"="alley"](around:${r},${lat},${lon});way["highway"="service"](around:${r},${lat},${lon});way["highway"="living_street"](around:${r},${lat},${lon}););out 100 geom tags;`;
 }
 
 function haversine(lat1, lon1, lat2, lon2) {
@@ -890,7 +884,7 @@ async function findAlley() {
     const displayName = entry.name;
     const cacheKey = entry.name;
 
-    // Resolve bbox once per country, then cache it
+    // Resolve bbox + city nodes once per country, then cache both
     if (!cachedArea || cachedArea.key !== cacheKey) {
       let bbox = entry.bboxOverride || null;
       if (!bbox) {
@@ -904,49 +898,41 @@ async function findAlley() {
           return;
         }
       }
-      cachedArea = { key: cacheKey, bbox, displayName };
+      startTimer(s => `Loading cities in ${displayName}... ${s}s`);
+      const cityNodes = await fetchCityNodes(bbox, signal);
+      cachedArea = { key: cacheKey, bbox, cityNodes, displayName };
     }
 
-    const { bbox } = cachedArea;
+    const { bbox, cityNodes } = cachedArea;
+    if (!cityNodes.length) {
+      setStatus(`No cities found in "${entry.name}" — try again.`);
+      setProgress(0);
+      document.getElementById('findBtn').disabled = false;
+      document.getElementById('cancelBtn').style.display = 'none';
+      return;
+    }
     const minConfidence = parseInt(document.getElementById('threshold').value);
     let ways = [], isAlleyTag = false, way, loc, pano, pct;
     const MAX_TRIES = 20;
 
+    // Track tried cities to avoid repeating empty ones
+    const triedCities = new Set();
+
     for (let attempt = 1; attempt <= MAX_TRIES; attempt++) {
-      // Sample a random sub-patch of the country bbox — no city list needed
-      const patch = randomPatch(bbox);
-      startTimer(s => `Searching${attempt > 1 ? ` (attempt ${attempt})` : ''}... ${s}s`);
-      const data = await overpassFetch(buildBboxQuery(patch.s, patch.w, patch.n, patch.e), signal);
+      // Pick a random untried city node
+      const untried = cityNodes.filter((_, i) => !triedCities.has(i));
+      if (!untried.length) break; // exhausted all cities
+      const cityIdx = cityNodes.indexOf(untried[Math.floor(Math.random() * untried.length)]);
+      triedCities.add(cityIdx);
+      const city = cityNodes[cityIdx];
+      const cityName = city.tags?.name || 'city';
+
+      startTimer(s => `Searching ${cityName}${attempt > 1 ? ` (attempt ${attempt})` : ''}... ${s}s`);
+      const data = await overpassFetch(buildAroundQuery(city.lat, city.lon), signal);
       ways = data.elements.filter(e => e.type === 'way' && e.geometry?.length >= 2);
+      if (ways.length < 3) continue;
 
-      // Option 2: skip sparse patches — fewer than 5 ways suggests rural/no SV coverage
-      if (ways.length < 5) continue;
-
-      // Option 1: density-bias way selection — score each way by how many other way
-      // centroids fall within ~300 m, then sample from the top half by density.
-      // More neighbours = more urban = more likely to have Street View.
-      const centroids = ways.map(w => {
-        const lats = w.geometry.map(n => n.lat);
-        const lons = w.geometry.map(n => n.lon);
-        return {
-          lat: lats.reduce((a, b) => a + b, 0) / lats.length,
-          lon: lons.reduce((a, b) => a + b, 0) / lons.length,
-        };
-      });
-      const DENSITY_DEG = 0.003; // ~300 m in degrees
-      const scored = ways.map((w, i) => {
-        let neighbours = 0;
-        for (let j = 0; j < centroids.length; j++) {
-          if (i === j) continue;
-          if (Math.abs(centroids[i].lat - centroids[j].lat) < DENSITY_DEG &&
-              Math.abs(centroids[i].lon - centroids[j].lon) < DENSITY_DEG) neighbours++;
-        }
-        return { w, neighbours };
-      });
-      scored.sort((a, b) => b.neighbours - a.neighbours);
-      const topHalf = scored.slice(0, Math.max(1, Math.ceil(scored.length / 2))).map(s => s.w);
-
-      way = topHalf[Math.floor(Math.random() * topHalf.length)];
+      way = ways[Math.floor(Math.random() * ways.length)];
       isAlleyTag = way.tags?.service === 'alley';
       const [lat, lng] = samplePoint(way.geometry);
       loc = { lat: +lat.toFixed(6), lng: +lng.toFixed(6) };
