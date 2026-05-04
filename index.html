@@ -878,22 +878,76 @@ function mergedSignal(userSignal, ms) {
   return tc.signal;
 }
 
+async function sleep(ms, signal) {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(resolve, ms);
+    signal.addEventListener('abort', () => { clearTimeout(t); reject(signal.reason); }, { once: true });
+  });
+}
+
 async function overpassFetch(query, signal) {
   const body = 'data=' + encodeURIComponent(query);
+  // Each mirror gets up to MAX_RETRIES attempts with exponential backoff.
+  // After all retries on one mirror are exhausted (or it errors hard),
+  // we rotate to the next mirror and reset the backoff.
+  const MAX_RETRIES = 3;          // attempts per mirror
+  const BASE_DELAY  = 1_000;      // 1 s base
+  const MAX_DELAY   = 30_000;     // 30 s cap
   let lastErr;
-  for (const mirror of OVERPASS_MIRRORS) {
-    const s = mergedSignal(signal, 60_000);
-    try {
-      const r = await fetch(mirror, { method: 'POST', body, signal: s });
-      if (r.status === 429 || r.status === 503) continue;
-      if (r.ok) return r.json();
-    } catch (e) {
-      if (e.name === 'AbortError' && signal.aborted) throw e;
-      lastErr = (e.name === 'TimeoutError' || e.name === 'AbortError')
-        ? new Error('Request timed out — try a smaller country or retry')
-        : e;
+
+  // Build a rotated list starting at a random mirror to spread load
+  const startIdx = Math.floor(Math.random() * OVERPASS_MIRRORS.length);
+  const mirrors  = [
+    ...OVERPASS_MIRRORS.slice(startIdx),
+    ...OVERPASS_MIRRORS.slice(0, startIdx),
+  ];
+
+  for (const mirror of mirrors) {
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      if (signal.aborted) throw signal.reason;
+
+      // Exponential backoff with ±20 % jitter (skip delay on first attempt of each mirror)
+      if (attempt > 0) {
+        const base  = Math.min(BASE_DELAY * 2 ** (attempt - 1), MAX_DELAY);
+        const delay = base * (0.8 + Math.random() * 0.4);
+        setStatus(`Rate limited — retrying in ${(delay / 1000).toFixed(1)} s…`);
+        try { await sleep(delay, signal); } catch (e) { throw e; }
+      }
+
+      const s = mergedSignal(signal, 60_000);
+      try {
+        const r = await fetch(mirror, { method: 'POST', body, signal: s });
+
+        if (r.status === 429 || r.status === 503) {
+          // Respect Retry-After header if present
+          const retryAfter = r.headers.get('Retry-After');
+          if (retryAfter && attempt === 0) {
+            const wait = Math.min(parseFloat(retryAfter) * 1000 || BASE_DELAY, MAX_DELAY);
+            setStatus(`Rate limited — waiting ${(wait / 1000).toFixed(0)} s…`);
+            try { await sleep(wait, signal); } catch (e) { throw e; }
+          }
+          lastErr = new Error(`HTTP ${r.status} from mirror`);
+          continue; // retry this mirror
+        }
+
+        if (!r.ok) {
+          lastErr = new Error(`HTTP ${r.status}`);
+          break; // hard failure — try next mirror
+        }
+
+        return r.json(); // success ✓
+
+      } catch (e) {
+        if (e.name === 'AbortError' && signal.aborted) throw e;
+        lastErr = (e.name === 'TimeoutError' || e.name === 'AbortError')
+          ? new Error('Request timed out — try a smaller country or retry')
+          : e;
+        // Network error: retry on same mirror (transient) then move on
+      }
     }
+    // All retries on this mirror exhausted — rotate to next
   }
+
   throw lastErr || new Error('All mirrors failed — try again in a moment');
 }
 
