@@ -481,7 +481,7 @@ const COUNTRIES = [
   { flag: '🇨🇱', name: 'Chile' },
   { flag: '🇺🇸', name: 'United States' },
   { flag: '🇬🇺', name: 'Guam' },
-  { flag: '🇲🇵', name: 'Northern Mariana Islands', searchAs: 'Saipan' },
+  { flag: '🇲🇵', name: 'Northern Mariana Islands', bboxOverride: { s: 15.10, w: 145.62, n: 15.33, e: 145.83 } },
   { flag: '🇨🇦', name: 'Canada' },
   { flag: '🇳🇿', name: 'New Zealand' },
   { flag: '🇦🇺', name: 'Australia' },
@@ -703,15 +703,15 @@ async function overpassFetch(query, signal) {
   throw lastErr || new Error('All mirrors failed — try again in a moment');
 }
 
-async function resolveCountryBbox(query, signal) {
-  const url = `https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(query)}&format=json&limit=5`;
-  const r = await fetch(url, { headers: { 'Accept': 'application/json' }, signal });
-  if (!r.ok) return null;
-  const data = await r.json();
-  const hit = data.find(d => d.osm_type === 'relation') || data[0];
-  if (!hit?.boundingbox) return null;
-  const [s, n, w, e] = hit.boundingbox.map(Number);
-  return { s, n, w, e };
+async function resolveCountryBbox(name, signal) {
+  // Ask Overpass for the bounding box of the country area directly —
+  // no Nominatim needed. Uses the same area["name:en"=...] trick as Urban Roulette.
+  const query = `[out:json][timeout:15];area["name:en"="${name}"]["admin_level"="2"];out bb 1;`;
+  const data = await overpassFetch(query, signal);
+  const area = data?.elements?.[0];
+  if (!area?.bounds) return null;
+  const { minlat: s, minlon: w, maxlat: n, maxlon: e } = area.bounds;
+  return { s, w, n, e };
 }
 
 
@@ -888,20 +888,22 @@ async function findAlley() {
   setProgress(0, true);
 
   try {
-    const searchQuery = entry.searchAs || entry.name;
     const displayName = entry.name;
     const cacheKey = entry.name;
 
     // Resolve bbox once per country, then cache it
     if (!cachedArea || cachedArea.key !== cacheKey) {
-      startTimer(s => `Locating ${displayName}... ${s}s`);
-      const bbox = await resolveCountryBbox(searchQuery, signal);
+      let bbox = entry.bboxOverride || null;
       if (!bbox) {
-        setStatus(`Couldn't find "${entry.name}" — try checking the spelling.`);
-        setProgress(0);
-        document.getElementById('findBtn').disabled = false;
-        document.getElementById('cancelBtn').style.display = 'none';
-        return;
+        startTimer(s => `Locating ${displayName}... ${s}s`);
+        bbox = await resolveCountryBbox(displayName, signal);
+        if (!bbox) {
+          setStatus(`Couldn't find "${entry.name}" — try checking the spelling.`);
+          setProgress(0);
+          document.getElementById('findBtn').disabled = false;
+          document.getElementById('cancelBtn').style.display = 'none';
+          return;
+        }
       }
       cachedArea = { key: cacheKey, bbox, displayName };
     }
