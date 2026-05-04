@@ -753,9 +753,24 @@ function loadCitiesDb(signal) {
   return citiesDbPromise;
 }
 
-function buildAroundQuery(lat, lon) {
-  const r = 5000;
-  return `[out:json][timeout:10];(way["highway"="service"]["service"="alley"](around:${r},${lat},${lon});way["highway"="service"](around:${r},${lat},${lon});way["highway"="living_street"](around:${r},${lat},${lon}););out 100 geom tags;`;
+// Two-stage probe to avoid pulling thousands of service roads in dense
+// US cities. Alley-only is small and fast; the broad fallback only runs
+// when the city genuinely has nothing tagged service=alley.
+function buildAlleyOnlyQuery(lat, lon) {
+  const r = 3000;
+  return `[out:json][timeout:8];way["highway"="service"]["service"="alley"](around:${r},${lat},${lon});out 80 geom tags;`;
+}
+function buildBroadQuery(lat, lon) {
+  const r = 3000;
+  return `[out:json][timeout:8];(way["highway"="service"](around:${r},${lat},${lon});way["highway"="living_street"](around:${r},${lat},${lon}););out 80 geom tags;`;
+}
+async function fetchCityWays(lat, lon, signal) {
+  const aData = await overpassFetch(buildAlleyOnlyQuery(lat, lon), signal);
+  const aWays = aData.elements.filter(e => e.type === 'way' && e.geometry?.length >= 2);
+  if (aWays.length >= 3) return aWays;
+  const bData = await overpassFetch(buildBroadQuery(lat, lon), signal);
+  const bWays = bData.elements.filter(e => e.type === 'way' && e.geometry?.length >= 2);
+  return aWays.concat(bWays);
 }
 
 function haversine(lat1, lon1, lat2, lon2) {
@@ -922,7 +937,7 @@ async function findAlley() {
       if (!pick) return null;
       return {
         name: pick.city.tags?.name || 'city',
-        promise: overpassFetch(buildAroundQuery(pick.city.lat, pick.city.lon), signal),
+        promise: fetchCityWays(pick.city.lat, pick.city.lon, signal),
       };
     };
 
@@ -933,12 +948,10 @@ async function findAlley() {
     for (let attempt = 1; attempt <= MAX_TRIES && current; attempt++) {
       const cityName = current.name;
       startTimer(s => `Searching ${cityName}${attempt > 1 ? ` (attempt ${attempt})` : ''}... ${s}s`);
-      let data;
-      try { data = await current.promise; }
+      try { ways = await current.promise; }
       catch (e) { current = next; next = startCityFetch(); if (e.name === 'AbortError') throw e; continue; }
       current = next;
       next = startCityFetch();
-      ways = data.elements.filter(e => e.type === 'way' && e.geometry?.length >= 2);
       if (ways.length < 3) continue;
 
       way = ways[Math.floor(Math.random() * ways.length)];
