@@ -148,7 +148,52 @@
     min-height: 1rem;
     width: 100%;
     max-width: 420px;
+    margin-bottom: 1rem;
+  }
+
+  .threshold-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    max-width: 420px;
     margin-bottom: 2rem;
+  }
+
+  .threshold-row label {
+    font-size: 0.72rem;
+    color: #444;
+    white-space: nowrap;
+  }
+
+  .threshold-row label span {
+    color: #aaa;
+    font-weight: 500;
+  }
+
+  #threshold {
+    flex: 1;
+    appearance: none;
+    height: 2px;
+    background: #2a2a2a;
+    outline: none;
+    cursor: pointer;
+  }
+
+  #threshold::-webkit-slider-thumb {
+    appearance: none;
+    width: 12px;
+    height: 12px;
+    background: #fff;
+    cursor: pointer;
+  }
+
+  #threshold::-moz-range-thumb {
+    width: 12px;
+    height: 12px;
+    background: #fff;
+    border: none;
+    cursor: pointer;
   }
 
   /* Result card */
@@ -309,6 +354,10 @@
 
 <div class="progress" id="progress"><div class="progress-bar" id="progressBar"></div></div>
 <div id="status"></div>
+<div class="threshold-row">
+  <label>Min confidence: <span id="thresholdVal">30%</span></label>
+  <input type="range" id="threshold" min="1" max="80" value="30" oninput="document.getElementById('thresholdVal').textContent=this.value+'%'">
+</div>
 
 <div id="result">
   <div class="result-header">
@@ -733,39 +782,47 @@ async function findAlley() {
       return;
     }
 
-    let ways = [], isAlleyTag = false;
-    const MAX_TRIES = 6;
+    const minConfidence = parseInt(document.getElementById('threshold').value);
+    let ways = [], isAlleyTag = false, way, loc, pano, pct;
+    const MAX_TRIES = 20;
+
     for (let attempt = 1; attempt <= MAX_TRIES; attempt++) {
-      const city = cityNodes[Math.floor(Math.random() * cityNodes.length)];
-      const cityName = city.tags?.name || 'city';
-      startTimer(s => `Searching ${cityName}${attempt > 1 ? ` (attempt ${attempt})` : ''}... ${s}s`);
-      let data = await overpassFetch(buildAroundQuery(city.lat, city.lon), signal);
-      ways = data.elements.filter(e => e.type === 'way' && e.geometry?.length >= 2);
-      if (ways.length) { isAlleyTag = true; break; }
-      data = await overpassFetch(buildAroundQuery(city.lat, city.lon, true), signal);
-      ways = data.elements.filter(e => e.type === 'way' && e.geometry?.length >= 2);
-      if (ways.length) { isAlleyTag = false; break; }
+      // Find a city with alleys
+      let foundWays = false;
+      for (let t = 0; t < 6; t++) {
+        const city = cityNodes[Math.floor(Math.random() * cityNodes.length)];
+        const cityName = city.tags?.name || 'city';
+        startTimer(s => `Searching${attempt > 1 ? ` (attempt ${attempt})` : ''}: ${cityName}... ${s}s`);
+        let data = await overpassFetch(buildAroundQuery(city.lat, city.lon), signal);
+        ways = data.elements.filter(e => e.type === 'way' && e.geometry?.length >= 2);
+        if (ways.length) { isAlleyTag = true; foundWays = true; break; }
+        data = await overpassFetch(buildAroundQuery(city.lat, city.lon, true), signal);
+        ways = data.elements.filter(e => e.type === 'way' && e.geometry?.length >= 2);
+        if (ways.length) { isAlleyTag = false; foundWays = true; break; }
+      }
+      if (!foundWays) continue;
+
+      way = ways[Math.floor(Math.random() * ways.length)];
+      const [lat, lng] = samplePoint(way.geometry);
+      loc = { lat: +lat.toFixed(6), lng: +lng.toFixed(6) };
+
+      startTimer(s => `Checking Street View${attempt > 1 ? ` (attempt ${attempt})` : ''}... ${s}s`);
+      pano = await findNearestPano(loc.lat, loc.lng);
+      pct = pano ? calcConfidence(loc.lat, loc.lng, pano.lat, pano.lng, isAlleyTag, way.geometry) : 0;
+
+      if (pct >= minConfidence) break;
+      pano = null;
     }
 
     stopTimer();
 
     if (!ways.length) {
-      setStatus(`No alleys found after ${MAX_TRIES} attempts — try again.`);
+      setStatus(`No alleys found — try again.`);
       setProgress(0);
       document.getElementById('findBtn').disabled = false;
       document.getElementById('cancelBtn').style.display = 'none';
       return;
     }
-
-    const way = ways[Math.floor(Math.random() * ways.length)];
-    const [lat, lng] = samplePoint(way.geometry);
-    const loc = { lat: +lat.toFixed(6), lng: +lng.toFixed(6) };
-    const title = cachedArea.displayName;
-
-    setStatus('Finding nearest Street View...');
-    console.log('[SV] starting lookup for', loc.lat, loc.lng);
-    const pano = await findNearestPano(loc.lat, loc.lng);
-    console.log('[SV] result', pano);
     const svLat  = pano ? pano.lat  : loc.lat;
     const svLng  = pano ? pano.lng  : loc.lng;
     const svHref = pano
@@ -774,15 +831,13 @@ async function findAlley() {
 
     const confEl = document.getElementById('confidence');
     const tooltip = confEl.querySelector('.tooltip');
-    if (pano) {
-      const pct = calcConfidence(loc.lat, loc.lng, pano.lat, pano.lng, isAlleyTag, way.geometry);
+    confEl.childNodes[0]?.nodeType === 3 && confEl.childNodes[0].remove();
+    if (pano && pct) {
       const color = confidenceColor(pct);
-      confEl.childNodes[0]?.nodeType === 3 && confEl.childNodes[0].remove();
       confEl.insertBefore(document.createTextNode(pct + '%'), tooltip);
       confEl.style.color = color;
       confEl.style.borderBottom = `2px solid ${color}`;
     } else {
-      confEl.childNodes[0]?.nodeType === 3 && confEl.childNodes[0].remove();
       confEl.style.borderBottom = 'none';
       confEl.style.color = '';
     }
