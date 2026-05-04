@@ -780,7 +780,7 @@ async function findNearestPano(lat, lng) {
   return null;
 }
 
-const CITY_CACHE_VERSION = 3;
+const CITY_CACHE_VERSION = 4;
 const CITY_CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 function loadCityCache(key) {
@@ -816,15 +816,29 @@ async function fetchCityNodes(bbox, signal) {
   } else {
     ranges = [{ s, w, n, e }];
   }
-  const seen = new Map();
-  for (const r of ranges) {
-    const query = `[out:json][timeout:15];node["place"~"^(city|town)$"](${r.s},${r.w},${r.n},${r.e});out 250;`;
-    const data = await overpassFetch(query, signal);
-    for (const el of data.elements) {
-      if (el.lat != null && el.lon != null) seen.set(el.id, el);
+
+  const runQuery = async (placeFilter, timeout, cap) => {
+    const seen = new Map();
+    const results = await Promise.all(ranges.map(r => {
+      const q = `[out:json][timeout:${timeout}];node["place"${placeFilter}](${r.s},${r.w},${r.n},${r.e});out ${cap};`;
+      return overpassFetch(q, signal);
+    }));
+    for (const data of results) {
+      for (const el of data.elements) {
+        if (el.lat != null && el.lon != null) seen.set(el.id, el);
+      }
     }
+    return [...seen.values()];
+  };
+
+  // Fast path: city only. Dramatically faster on large countries (US, Russia,
+  // Brazil, India) where enumerating place=town would scan thousands of nodes.
+  let nodes = await runQuery('="city"', 10, 200);
+  // Fallback: include towns only if the country has few cities.
+  if (nodes.length < 20) {
+    nodes = await runQuery('~"^(city|town)$"', 15, 250);
   }
-  return [...seen.values()];
+  return nodes;
 }
 
 function buildAroundQuery(lat, lon) {
