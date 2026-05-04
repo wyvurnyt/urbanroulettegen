@@ -361,6 +361,10 @@
   <label>Min confidence: <span id="thresholdVal">30%</span></label>
   <input type="range" id="threshold" min="1" max="70" value="30" oninput="document.getElementById('thresholdVal').textContent=this.value+'%'">
 </div>
+<div style="width:100%;max-width:420px;display:flex;justify-content:space-between;margin-top:-1rem;margin-bottom:2rem;">
+  <span style="font-size:0.65rem;color:#333;">(faster but less accurate)</span>
+  <span style="font-size:0.65rem;color:#333;">(slower but better locations)</span>
+</div>
 
 <div id="result">
   <div class="result-header">
@@ -386,7 +390,7 @@
 <div id="history-label">Previous</div>
 <div id="history"></div>
 
-<p style="width:100%;max-width:420px;font-size:0.72rem;color:#333;text-align:center;margin-top:2rem;">This is still in beta mode and extremely inaccurate.</p>
+<p style="width:100%;max-width:420px;font-size:0.72rem;color:#333;text-align:center;margin-top:2rem;">This is still in beta mode and can be extremely inaccurate.</p>
 
 <script>
 const COUNTRIES = [
