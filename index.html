@@ -548,7 +548,7 @@ async function fetchCityNodes(areaId, signal) {
 function svLookup(lat, lng, radius) {
   return new Promise(resolve => {
     const cb = '_sv_' + Date.now();
-    const timer = setTimeout(() => { cleanup(); resolve(null); }, 5000);
+    const timer = setTimeout(() => { console.log('[SV] timeout at radius', radius); cleanup(); resolve(null); }, 5000);
     function cleanup() { clearTimeout(timer); delete window[cb]; script.remove(); }
     window[cb] = data => {
       cleanup();
@@ -567,7 +567,8 @@ function svLookup(lat, lng, radius) {
     };
     const script = Object.assign(document.createElement('script'), {
       src: `https://maps.googleapis.com/maps/api/js/GeoPhotoService.SingleImageSearch?pb=!1m5!1sapiv3!5sUS!11m2!1m1!1b0!2m4!1m2!3d${lat}!4d${lng}!2d${radius}!3m4!2m2!1sen!2sUS!4m6!1e1!1e2!1e3!1e4!1e8!1e6&callback=${cb}`,
-      onerror: () => { cleanup(); resolve(null); },
+      onload: () => console.log('[SV] script loaded, waiting for callback'),
+      onerror: (e) => { console.log('[SV] script error', e); cleanup(); resolve(null); },
     });
     document.head.appendChild(script);
   });
@@ -762,7 +763,9 @@ async function findAlley() {
     const title = cachedArea.displayName;
 
     setStatus('Finding nearest Street View...');
+    console.log('[SV] starting lookup for', loc.lat, loc.lng);
     const pano = await findNearestPano(loc.lat, loc.lng);
+    console.log('[SV] result', pano);
     const svLat  = pano ? pano.lat  : loc.lat;
     const svLng  = pano ? pano.lng  : loc.lng;
     const svHref = pano
