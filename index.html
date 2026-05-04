@@ -410,7 +410,7 @@ const COUNTRIES = [
   { flag: '🇵🇹', name: 'Portugal' },
   { flag: '🇭🇷', name: 'Croatia' },
   { flag: '🇸🇮', name: 'Slovenia' },
-  { flag: '🇲🇪', name: 'Montenegro' },
+  { flag: '🇲🇪', name: 'Montenegro', bboxOverride: { s: 41.85, w: 18.45, n: 43.55, e: 20.36 } },
   { flag: '🇧🇦', name: 'Bosnia and Herzegovina' },
   { flag: '🇦🇱', name: 'Albania' },
   { flag: '🇹🇷', name: 'Turkey' },
@@ -704,13 +704,12 @@ async function overpassFetch(query, signal) {
 }
 
 async function resolveCountryBbox(name, signal) {
-  // Ask Overpass for the bounding box of the country area directly —
-  // no Nominatim needed. Uses the same area["name:en"=...] trick as Urban Roulette.
-  const query = `[out:json][timeout:15];area["name:en"="${name}"]["admin_level"="2"];out bb 1;`;
+  // Query the relation directly — area elements don't support "out bb".
+  const query = `[out:json][timeout:15];rel["name:en"="${name}"]["admin_level"="2"];out bb 1;`;
   const data = await overpassFetch(query, signal);
-  const area = data?.elements?.[0];
-  if (!area?.bounds) return null;
-  const { minlat: s, minlon: w, maxlat: n, maxlon: e } = area.bounds;
+  const rel = data?.elements?.[0];
+  if (!rel?.bounds) return null;
+  const { minlat: s, minlon: w, maxlat: n, maxlon: e } = rel.bounds;
   return { s, w, n, e };
 }
 
