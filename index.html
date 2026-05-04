@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Alley Finder</title>
+<link rel="icon" type="image/x-icon" href="favicon.ico">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500&display=swap" rel="stylesheet">
@@ -410,7 +411,7 @@ const COUNTRIES = [
   { flag: '🇵🇹', name: 'Portugal' },
   { flag: '🇭🇷', name: 'Croatia' },
   { flag: '🇸🇮', name: 'Slovenia' },
-  { flag: '🇲🇪', name: 'Montenegro', bboxOverride: { s: 41.85, w: 18.45, n: 43.55, e: 20.36 } },
+  { flag: '🇲🇪', name: 'Montenegro' },
   { flag: '🇧🇦', name: 'Bosnia and Herzegovina' },
   { flag: '🇦🇱', name: 'Albania' },
   { flag: '🇹🇷', name: 'Turkey' },
@@ -479,9 +480,9 @@ const COUNTRIES = [
   { flag: '🇺🇾', name: 'Uruguay' },
   { flag: '🇵🇾', name: 'Paraguay' },
   { flag: '🇨🇱', name: 'Chile' },
-  { flag: '🇺🇸', name: 'United States', bboxOverride: { s: 24.52, w: -124.77, n: 49.38, e: -66.95 } },
+  { flag: '🇺🇸', name: 'United States' },
   { flag: '🇬🇺', name: 'Guam' },
-  { flag: '🇲🇵', name: 'Northern Mariana Islands', bboxOverride: { s: 15.10, w: 145.62, n: 15.33, e: 145.83 } },
+  { flag: '🇲🇵', name: 'Northern Mariana Islands' },
   { flag: '🇨🇦', name: 'Canada' },
   { flag: '🇳🇿', name: 'New Zealand' },
   { flag: '🇦🇺', name: 'Australia' },
@@ -703,45 +704,6 @@ async function overpassFetch(query, signal) {
   throw lastErr || new Error('All mirrors failed — try again in a moment');
 }
 
-function loadBboxCache(name) {
-  try {
-    const raw = localStorage.getItem('bboxCache:' + name);
-    if (!raw) return null;
-    const obj = JSON.parse(raw);
-    if (Date.now() - obj.t > 30 * 24 * 60 * 60 * 1000) return null; // 30 days
-    return obj.bbox;
-  } catch { return null; }
-}
-function saveBboxCache(name, bbox) {
-  try { localStorage.setItem('bboxCache:' + name, JSON.stringify({ t: Date.now(), bbox })); } catch {}
-}
-
-async function resolveCountryBbox(name, signal) {
-  const cached = loadBboxCache(name);
-  if (cached) return cached;
-
-  // Nominatim is purpose-built for geocoding and resolves a country bbox in
-  // ~200-500ms, vs Overpass admin_level=2 lookups which often take 10-30s.
-  const url = `https://nominatim.openstreetmap.org/search?country=${encodeURIComponent(name)}&format=json&limit=1`;
-  const s = mergedSignal(signal, 15_000);
-  try {
-    const r = await fetch(url, { signal: s, headers: { 'Accept': 'application/json' } });
-    if (!r.ok) return null;
-    const arr = await r.json();
-    const hit = arr?.[0];
-    if (!hit?.boundingbox) return null;
-    const [minlat, maxlat, minlon, maxlon] = hit.boundingbox.map(parseFloat);
-    const bbox = { s: minlat, w: minlon, n: maxlat, e: maxlon };
-    saveBboxCache(name, bbox);
-    return bbox;
-  } catch (e) {
-    if (e.name === 'AbortError' && signal.aborted) throw e;
-    return null;
-  }
-}
-
-
-
 let mapsApiPromise = null;
 function loadMapsAPI() {
   if (mapsApiPromise) return mapsApiPromise;
@@ -780,65 +742,15 @@ async function findNearestPano(lat, lng) {
   return null;
 }
 
-const CITY_CACHE_VERSION = 4;
-const CITY_CACHE_TTL = 7 * 24 * 60 * 60 * 1000; // 7 days
-
-function loadCityCache(key) {
-  try {
-    const raw = localStorage.getItem('cityCache:' + key);
-    if (!raw) return null;
-    const obj = JSON.parse(raw);
-    if (obj.v !== CITY_CACHE_VERSION) return null;
-    if (Date.now() - obj.t > CITY_CACHE_TTL) return null;
-    return obj.data;
-  } catch { return null; }
-}
-
-function saveCityCache(key, data) {
-  try {
-    localStorage.setItem('cityCache:' + key, JSON.stringify({ v: CITY_CACHE_VERSION, t: Date.now(), data }));
-  } catch {}
-}
-
-async function fetchCityNodes(bbox, signal) {
-  const { s, w, n, e } = bbox;
-  // Handle countries crossing the antimeridian. Two cases:
-  //   1. w > e (proper wraparound from Nominatim).
-  //   2. w < e but spans ~360° longitude (Nominatim sometimes returns
-  //      [-180, 180] for countries with far-flung territories like the US,
-  //      Russia, NZ, Fiji, Kiribati).
-  let ranges;
-  if (w > e) {
-    ranges = [{ s, w, n, e: 180 }, { s, w: -180, n, e }];
-  } else if (e - w > 180) {
-    const mid = (w + e) / 2;
-    ranges = [{ s, w, n, e: mid }, { s, w: mid, n, e }];
-  } else {
-    ranges = [{ s, w, n, e }];
-  }
-
-  const runQuery = async (placeFilter, timeout, cap) => {
-    const seen = new Map();
-    const results = await Promise.all(ranges.map(r => {
-      const q = `[out:json][timeout:${timeout}];node["place"${placeFilter}](${r.s},${r.w},${r.n},${r.e});out ${cap};`;
-      return overpassFetch(q, signal);
-    }));
-    for (const data of results) {
-      for (const el of data.elements) {
-        if (el.lat != null && el.lon != null) seen.set(el.id, el);
-      }
-    }
-    return [...seen.values()];
-  };
-
-  // Fast path: city only. Dramatically faster on large countries (US, Russia,
-  // Brazil, India) where enumerating place=town would scan thousands of nodes.
-  let nodes = await runQuery('="city"', 10, 200);
-  // Fallback: include towns only if the country has few cities.
-  if (nodes.length < 20) {
-    nodes = await runQuery('~"^(city|town)$"', 15, 250);
-  }
-  return nodes;
+// Static city DB: shipped as cities.json next to index.html.
+// { "Country Name": [[name, lat, lon], ...], ... } sorted by population desc.
+let citiesDbPromise = null;
+function loadCitiesDb(signal) {
+  if (citiesDbPromise) return citiesDbPromise;
+  citiesDbPromise = fetch('cities.json', { signal })
+    .then(r => r.ok ? r.json() : Promise.reject(new Error(`cities.json HTTP ${r.status}`)))
+    .catch(err => { citiesDbPromise = null; throw err; });
+  return citiesDbPromise;
 }
 
 function buildAroundQuery(lat, lon) {
@@ -964,32 +876,28 @@ async function findAlley() {
     const displayName = entry.name;
     const cacheKey = entry.name;
 
-    // Resolve bbox + city nodes once per country, then cache both
+    // Look up cities from the static DB (loaded once per page).
     if (!cachedArea || cachedArea.key !== cacheKey) {
-      let bbox = entry.bboxOverride || null;
-      if (!bbox) {
-        startTimer(s => `Locating ${displayName}... ${s}s`);
-        bbox = await resolveCountryBbox(displayName, signal);
-        if (!bbox) {
-          setStatus(`Couldn't find "${entry.name}" — try checking the spelling.`);
-          setProgress(0);
-          document.getElementById('findBtn').disabled = false;
-          document.getElementById('cancelBtn').style.display = 'none';
-          return;
-        }
+      startTimer(s => `Loading cities... ${s}s`);
+      let db;
+      try { db = await loadCitiesDb(signal); }
+      catch (err) {
+        if (err.name === 'AbortError') throw err;
+        setStatus(`Couldn't load city database: ${err.message}`);
+        setProgress(0);
+        document.getElementById('findBtn').disabled = false;
+        document.getElementById('cancelBtn').style.display = 'none';
+        return;
       }
-      let cityNodes = loadCityCache(cacheKey);
-      if (!cityNodes) {
-        startTimer(s => `Loading cities in ${displayName}... ${s}s`);
-        cityNodes = await fetchCityNodes(bbox, signal);
-        saveCityCache(cacheKey, cityNodes);
-      }
-      cachedArea = { key: cacheKey, bbox, cityNodes, displayName };
+      const raw = db[entry.name] || [];
+      // Normalize to the shape the rest of the code expects: { lat, lon, tags: { name } }
+      const cityNodes = raw.map(([name, lat, lon]) => ({ lat, lon, tags: { name } }));
+      cachedArea = { key: cacheKey, cityNodes, displayName };
     }
 
-    const { bbox, cityNodes } = cachedArea;
+    const { cityNodes } = cachedArea;
     if (!cityNodes.length) {
-      setStatus(`No cities found in "${entry.name}" — try again.`);
+      setStatus(`No cities listed for "${entry.name}".`);
       setProgress(0);
       document.getElementById('findBtn').disabled = false;
       document.getElementById('cancelBtn').style.display = 'none';
