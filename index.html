@@ -296,21 +296,34 @@
     opacity: 0.5;
   }
 
+  /* Side-by-side panels */
+  #panels {
+    width: 100%;
+    max-width: 860px;
+    display: flex;
+    gap: 1.5rem;
+    align-items: flex-start;
+  }
+
+  #history-col, #builder-col {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+
   /* History */
   #history-label {
     font-size: 0.65rem;
     color: #2a2a2a;
     text-transform: uppercase;
     letter-spacing: 0.1em;
-    width: 100%;
-    max-width: 420px;
     margin-bottom: 0.4rem;
     display: none;
   }
 
   #history {
-    width: 100%;
-    max-width: 420px;
     display: flex;
     flex-direction: column;
     gap: 0.25rem;
@@ -339,7 +352,7 @@
   .hist-links a:hover { color: #666; }
   .hist-links svg { width: 0.8rem; height: 0.8rem; }
 
-  /* Map builder */
+  /* Map builder panel */
   #save-btn {
     display: flex;
     align-items: center;
@@ -357,9 +370,6 @@
   #save-btn svg { width: 0.9rem; height: 0.9rem; opacity: 0.5; }
 
   #map-builder {
-    width: 100%;
-    max-width: 420px;
-    margin-top: 2rem;
     display: none;
     flex-direction: column;
     gap: 0.5rem;
@@ -466,16 +476,21 @@
   </div>
 </div>
 
-<div id="history-label">Previous</div>
-<div id="history"></div>
-
-<div id="map-builder">
-  <div id="map-builder-label">Map builder (<span id="map-count">0</span> locations)</div>
-  <div id="map-entries"></div>
-  <button id="export-btn" onclick="exportMapJson()">
-    Export map JSON
-    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-  </button>
+<div id="panels">
+  <div id="history-col">
+    <div id="history-label">Previous</div>
+    <div id="history"></div>
+  </div>
+  <div id="builder-col">
+    <div id="map-builder">
+      <div id="map-builder-label">Map builder (<span id="map-count">0</span> locations)</div>
+      <div id="map-entries"></div>
+      <button id="export-btn" onclick="exportMapJson()">
+        Export map JSON
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      </button>
+    </div>
+  </div>
 </div>
 
 <p style="width:100%;max-width:420px;font-size:0.72rem;color:#333;text-align:center;margin-top:2rem;">This is still in beta mode and can be extremely inaccurate.</p>
