@@ -964,7 +964,7 @@ async function findAlley() {
       // Apply ±10 display jitter in range 11-74 without affecting the threshold check.
       let displayPct = pct;
       if (pct >= 11 && pct <= 74) {
-        displayPct = Math.max(0, Math.min(84, Math.round(pct + (Math.random() * 20 - 10))));
+        displayPct = Math.max(minConfidence, Math.min(84, Math.round(pct + (Math.random() * 20 - 10))));
       }
       const color = confidenceColor(displayPct);
       confEl.insertBefore(document.createTextNode(displayPct + '%'), tooltip);
