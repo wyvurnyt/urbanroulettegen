@@ -947,18 +947,16 @@ async function findAlley() {
 
     stopTimer();
 
-    if (!ways.length) {
-      setStatus(`No alleys found — try again.`);
+    if (!ways.length || !pano) {
+      setStatus(`No valid Street View found — try again.`);
       setProgress(0);
       document.getElementById('findBtn').disabled = false;
       document.getElementById('cancelBtn').style.display = 'none';
       return;
     }
-    const svLat  = pano ? pano.lat  : loc.lat;
-    const svLng  = pano ? pano.lng  : loc.lng;
-    const svHref = pano
-      ? `https://www.google.com/maps/@?api=1&map_action=pano&pano=${pano.panoId}`
-      : `https://www.google.com/maps/@${svLat},${svLng},3a,75y,90h,90t/data=!3m6!1e1!3m4!1s!2e0!7i16384!8i8192`;
+    const svLat  = pano.lat;
+    const svLng  = pano.lng;
+    const svHref = `https://www.google.com/maps/@?api=1&map_action=pano&pano=${pano.panoId}`;
 
     const confEl = document.getElementById('confidence');
     const tooltip = confEl.querySelector('.tooltip');
