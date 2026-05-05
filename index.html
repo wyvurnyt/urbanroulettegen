@@ -671,7 +671,7 @@ async function overpassFetch(query, signal) {
     return data;
   } catch (e) {
     if (signal.aborted) throw signal.reason;
-    throw new Error('All Overpass mirrors failed — try again in a moment');
+    throw new Error('All Overpass mirrors failed, try again in a moment');
   } finally {
     signal.removeEventListener('abort', onAbort);
   }
@@ -780,7 +780,7 @@ function calcConfidence(alleyLat, alleyLng, panoLat, panoLng, isAlleyTag, wayNod
   // Remap with a cubic curve so the scale is less optimistic:
   // 84 → 84, 71 → ~50, lower scores fall off steeply.
   const MAX_RAW = 84;
-  const remapped = Math.round(MAX_RAW * Math.pow(Math.min(score, MAX_RAW) / MAX_RAW, 3));
+  const remapped = Math.round(MAX_RAW * Math.pow(Math.min(score, MAX_RAW) / MAX_RAW, 3.2));
   return remapped;
 }
 
@@ -948,7 +948,7 @@ async function findAlley() {
     stopTimer();
 
     if (!ways.length || !pano) {
-      setStatus(`No valid Street View found — try again.`);
+      setStatus(`No valid Street View found, try again.`);
       setProgress(0);
       document.getElementById('findBtn').disabled = false;
       document.getElementById('cancelBtn').style.display = 'none';
