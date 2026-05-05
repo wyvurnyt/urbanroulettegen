@@ -338,6 +338,80 @@
 
   .hist-links a:hover { color: #666; }
   .hist-links svg { width: 0.8rem; height: 0.8rem; }
+
+  /* Map builder */
+  #save-btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    background: #1e1e1e;
+    color: #666;
+    font-size: 0.85rem;
+    border: 1px solid #2a2a2a;
+    cursor: pointer;
+    width: 100%;
+    font-family: inherit;
+  }
+  #save-btn:hover { background: #252525; color: #aaa; border-color: #444; }
+  #save-btn svg { width: 0.9rem; height: 0.9rem; opacity: 0.5; }
+
+  #map-builder {
+    width: 100%;
+    max-width: 420px;
+    margin-top: 2rem;
+    display: none;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  #map-builder.visible { display: flex; }
+
+  #map-builder-label {
+    font-size: 0.65rem;
+    color: #2a2a2a;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 0.1rem;
+  }
+
+  .map-entry {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0.4rem 0.75rem;
+    background: #161616;
+    font-size: 0.72rem;
+    color: #555;
+    gap: 1rem;
+  }
+  .map-entry-remove {
+    background: none;
+    border: none;
+    color: #333;
+    cursor: pointer;
+    font-size: 0.8rem;
+    padding: 0;
+    line-height: 1;
+    font-family: inherit;
+  }
+  .map-entry-remove:hover { color: #f87171; }
+
+  #export-btn {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    background: #111;
+    color: #aaa;
+    font-size: 0.85rem;
+    border: 1px solid #2a2a2a;
+    cursor: pointer;
+    width: 100%;
+    font-family: inherit;
+    margin-top: 0.25rem;
+  }
+  #export-btn:hover { background: #1a1a1a; color: #fff; border-color: #444; }
+  #export-btn svg { width: 0.9rem; height: 0.9rem; opacity: 0.5; }
 </style>
 </head>
 <body>
@@ -385,11 +459,24 @@
       View on Google Maps
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
     </a>
+    <button id="save-btn" onclick="saveToMap()">
+      Save to map
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
+    </button>
   </div>
 </div>
 
 <div id="history-label">Previous</div>
 <div id="history"></div>
+
+<div id="map-builder">
+  <div id="map-builder-label">Map builder (<span id="map-count">0</span> locations)</div>
+  <div id="map-entries"></div>
+  <button id="export-btn" onclick="exportMapJson()">
+    Export map JSON
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+  </button>
+</div>
 
 <p style="width:100%;max-width:420px;font-size:0.72rem;color:#333;text-align:center;margin-top:2rem;">This is still in beta mode and can be extremely inaccurate.</p>
 
@@ -808,6 +895,66 @@ function samplePoint(nodes) {
     if (r <= cum) { const t = Math.random(); return [lerp(s.a.lat,s.b.lat,t), lerp(s.a.lon,s.b.lon,t)]; }
   }
   return [nodes.at(-1).lat, nodes.at(-1).lon];
+}
+
+// ── Map builder ───────────────────────────────────────────────────────────
+
+const mapLocations = [];
+
+function saveToMap() {
+  const panoId  = document.getElementById('result-sv').href.match(/pano=([^&]+)/)?.[1];
+  const coords  = document.getElementById('result-coords').textContent.split(', ');
+  const title   = document.getElementById('result-title').textContent;
+  if (!panoId || coords.length < 2) return;
+  const lat = parseFloat(coords[0]);
+  const lng = parseFloat(coords[1]);
+  mapLocations.push({ lat, lng, panoId, label: title });
+  renderMapBuilder();
+  // Flash button to confirm save
+  const btn = document.getElementById('save-btn');
+  btn.textContent = 'Saved!';
+  setTimeout(() => {
+    btn.innerHTML = 'Save to map <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>';
+  }, 1000);
+}
+
+function removeMapEntry(idx) {
+  mapLocations.splice(idx, 1);
+  renderMapBuilder();
+}
+
+function renderMapBuilder() {
+  const builder = document.getElementById('map-builder');
+  const entries = document.getElementById('map-entries');
+  const count   = document.getElementById('map-count');
+  count.textContent = mapLocations.length;
+  builder.classList.toggle('visible', mapLocations.length > 0);
+  entries.innerHTML = '';
+  mapLocations.forEach((loc, i) => {
+    const div = document.createElement('div');
+    div.className = 'map-entry';
+    div.innerHTML = `<span>${loc.label} &nbsp; ${loc.lat}, ${loc.lng}</span><button class="map-entry-remove" onclick="removeMapEntry(${i})" title="Remove">✕</button>`;
+    entries.appendChild(div);
+  });
+}
+
+function exportMapJson() {
+  const coords = mapLocations.map(loc => ({
+    lat: loc.lat,
+    lng: loc.lng,
+    heading: 0,
+    pitch: 0,
+    zoom: 0.1699241212803475,
+    panoId: null,
+    countryCode: null,
+    stateCode: null,
+    extra: { panoId: loc.panoId, panoDate: '' },
+  }));
+  const json = JSON.stringify({ name: 'Locations', customCoordinates: coords });
+  const a = document.createElement('a');
+  a.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(json);
+  a.download = 'alley-map.json';
+  a.click();
 }
 
 // ── UI ────────────────────────────────────────────────────────────────────
