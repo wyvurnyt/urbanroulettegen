@@ -296,61 +296,6 @@
     opacity: 0.5;
   }
 
-  /* Side-by-side panels */
-  #panels {
-    width: 100%;
-    max-width: 860px;
-    display: flex;
-    gap: 1.5rem;
-    align-items: flex-start;
-  }
-
-  #history-col, #builder-col {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-  }
-
-  /* History */
-  #history-label {
-    font-size: 0.65rem;
-    color: #2a2a2a;
-    text-transform: uppercase;
-    letter-spacing: 0.1em;
-    margin-bottom: 0.4rem;
-    display: none;
-  }
-
-  #history {
-    display: flex;
-    flex-direction: column;
-    gap: 0.25rem;
-  }
-
-  .hist-item {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 0.4rem 0.75rem;
-    background: #161616;
-    font-size: 0.72rem;
-    color: #333;
-    gap: 1rem;
-  }
-
-  .hist-links { display: flex; gap: 0.5rem; flex-shrink: 0; }
-
-  .hist-links a {
-    color: #2a2a2a;
-    text-decoration: none;
-    display: inline-flex;
-    align-items: center;
-  }
-
-  .hist-links a:hover { color: #666; }
-  .hist-links svg { width: 0.8rem; height: 0.8rem; }
 
   /* Map builder panel */
   #save-btn {
@@ -370,9 +315,12 @@
   #save-btn svg { width: 0.9rem; height: 0.9rem; opacity: 0.5; }
 
   #map-builder {
+    width: 100%;
+    max-width: 420px;
     display: none;
     flex-direction: column;
     gap: 0.5rem;
+    margin-top: 2rem;
   }
   #map-builder.visible { display: flex; }
 
@@ -476,21 +424,13 @@
   </div>
 </div>
 
-<div id="panels">
-  <div id="history-col">
-    <div id="history-label">Previous</div>
-    <div id="history"></div>
-  </div>
-  <div id="builder-col">
-    <div id="map-builder">
-      <div id="map-builder-label">Map builder (<span id="map-count">0</span> locations)</div>
-      <div id="map-entries"></div>
-      <button id="export-btn" onclick="exportMapJson()">
-        Export map JSON
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-      </button>
-    </div>
-  </div>
+<div id="map-builder">
+  <div id="map-builder-label">Map builder (<span id="map-count">0</span> locations)</div>
+  <div id="map-entries"></div>
+  <button id="export-btn" onclick="exportMapJson()">
+    Export map JSON
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+  </button>
 </div>
 
 <p style="width:100%;max-width:420px;font-size:0.72rem;color:#333;text-align:center;margin-top:2rem;">This is still in beta mode and can be extremely inaccurate.</p>
@@ -981,28 +921,6 @@ function cancelSearch() {
   document.getElementById('cancelBtn').style.display = 'none';
 }
 
-function pushHistory(title, lat, lng) {
-  const svUrl  = `https://www.google.com/maps/@${lat},${lng},3a,75y,90h,90t/data=!3m6!1e1!3m4!1s!2e0!7i16384!8i8192`;
-  const mapUrl = `https://www.google.com/maps?q=${lat},${lng}`;
-  const label  = document.getElementById('history-label');
-  const hist   = document.getElementById('history');
-  const div    = document.createElement('div');
-  div.className = 'hist-item';
-  div.innerHTML = `
-    <span>${title} &nbsp; ${lat}, ${lng}</span>
-    <span class="hist-links">
-      <a href="${svUrl}" target="_blank" title="Street View">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 22 L8 2 L16 2 L21 22"/><line x1="12" y1="4" x2="12" y2="8"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="12" y1="20" x2="12" y2="22"/></svg>
-      </a>
-      <a href="${mapUrl}" target="_blank" title="Map">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 6-9 13-9 13s-9-7-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
-      </a>
-    </span>`;
-  hist.insertBefore(div, hist.firstChild);
-  while (hist.children.length > 10) hist.lastChild.remove();
-  label.style.display = '';
-}
-
 // ── Main ──────────────────────────────────────────────────────────────────
 
 async function findAlley() {
@@ -1011,14 +929,6 @@ async function findAlley() {
     return raw ? COUNTRIES.find(c => c.name.toLowerCase() === raw.toLowerCase()) || { name: raw } : null;
   })();
   if (!entry) return;
-
-  // Push previous result to history
-  if (document.getElementById('result').classList.contains('visible')) {
-    pushHistory(
-      document.getElementById('result-title').textContent,
-      ...document.getElementById('result-coords').textContent.split(', ')
-    );
-  }
 
   currentController = new AbortController();
   const { signal } = currentController;
