@@ -577,7 +577,7 @@ let activeIndex = -1;
 function renderDropdown(filter) {
   const dd = document.getElementById('dropdown');
   const items = filter
-    ? COUNTRIES.filter(c => c.name.toLowerCase().includes(filter.toLowerCase()))
+    ? COUNTRIES.filter(c => normStr(c.name).includes(normStr(filter)))
     : COUNTRIES;
 
   if (!items.length) { dd.classList.remove('open'); return; }
@@ -648,10 +648,18 @@ document.addEventListener('click', e => {
     document.getElementById('dropdown').classList.remove('open');
 });
 
+function normStr(s) {
+  // Lowercase + strip diacritics so "turkiye" matches "Türkiye", etc.
+  return s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
 function extractName(val) {
   // Strip leading emoji/whitespace
   return val.replace(/^[\p{Emoji}\s]+/u, '').trim();
 }
+
+// Aliases: alternate spellings that should resolve to a canonical country name.
+const COUNTRY_ALIASES = { 'turkey': 'Türkiye' };
 
 // ── Progress / Status ─────────────────────────────────────────────────────
 
@@ -945,7 +953,10 @@ function cancelSearch() {
 async function findAlley() {
   const entry = selectedCountry || (() => {
     const raw = extractName(document.getElementById('countryInput').value.trim());
-    return raw ? COUNTRIES.find(c => c.name.toLowerCase() === raw.toLowerCase()) || { name: raw } : null;
+    if (!raw) return null;
+    const alias = COUNTRY_ALIASES[normStr(raw)];
+    const resolved = alias || raw;
+    return COUNTRIES.find(c => normStr(c.name) === normStr(resolved)) || { name: resolved };
   })();
   if (!entry) return;
 
