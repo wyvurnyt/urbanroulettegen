@@ -903,7 +903,7 @@ function exportMapJson() {
     panoId: null,
     countryCode: null,
     stateCode: null,
-    extra: { panoId: loc.panoId, panoDate: '' },
+    extra: { panoId: loc.panoId },
   }));
   const json = JSON.stringify({ name: 'Locations', customCoordinates: coords });
   const a = document.createElement('a');
