@@ -360,7 +360,7 @@
 <div id="status"></div>
 <div class="threshold-row">
   <label>Min confidence: <span id="thresholdVal">30%</span></label>
-  <input type="range" id="threshold" min="1" max="70" value="30" oninput="document.getElementById('thresholdVal').textContent=this.value+'%'">
+  <input type="range" id="threshold" min="1" max="60" value="30" oninput="document.getElementById('thresholdVal').textContent=this.value+'%'">
 </div>
 <div style="width:100%;max-width:420px;display:flex;justify-content:space-between;margin-top:-1rem;margin-bottom:2rem;">
   <span style="font-size:0.65rem;color:#333;">(faster but less accurate)</span>
@@ -443,6 +443,7 @@ const COUNTRIES = [
   { flag: '🇨🇾', name: 'Cyprus' },
   { flag: '🇮🇸', name: 'Iceland' },
   { flag: '🇱🇺', name: 'Luxembourg' },
+  { flag: '🇲🇹', name: 'Malta' },
   { flag: '🇱🇮', name: 'Liechtenstein' },
   { flag: '🇦🇩', name: 'Andorra' },
   { flag: '🇮🇲', name: 'Isle of Man' },
@@ -775,7 +776,12 @@ function calcConfidence(alleyLat, alleyLng, panoLat, panoLng, isAlleyTag, wayNod
   const len = wayLengthM(wayNodes);
   if (len < 40)  score += 6;
   else if (len > 400) score -= 10;
-  return Math.max(0, Math.min(100, Math.round(score)));
+  score = Math.max(0, score);
+  // Remap with a cubic curve so the scale is less optimistic:
+  // 84 → 84, 71 → ~50, lower scores fall off steeply.
+  const MAX_RAW = 84;
+  const remapped = Math.round(MAX_RAW * Math.pow(Math.min(score, MAX_RAW) / MAX_RAW, 3));
+  return remapped;
 }
 
 function confidenceColor(pct) {
