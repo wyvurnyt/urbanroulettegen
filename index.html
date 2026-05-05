@@ -414,7 +414,7 @@
   <div class="result-header">
     <div class="result-top">
       <div class="result-label">Alley Found</div>
-      <div id="confidence"><span class="tooltip">How likely this is a good GeoGuessr alley location. Based on how far Street View snapped from the alley (closer is better), whether it has a proper alley tag in OpenStreetMap, and how short and enclosed the way is.</span></div>
+      <div id="confidence"><span class="tooltip">How likely this is an alley. Based on how far Street View snapped from the alley (closer is better), whether it has a proper alley tag in OpenStreetMap, and how short and enclosed the way is.</span></div>
     </div>
     <div id="result-title"></div>
     <div id="result-coords"></div>
@@ -446,7 +446,10 @@
   <div id="history"></div>
 </div>
 
-<p style="width:100%;max-width:420px;font-size:0.72rem;color:#333;text-align:center;margin-top:2rem;">This is still in beta mode and can be extremely inaccurate.</p>
+<div style="width:100%;max-width:420px;background:#161616;border:1px solid #222;padding:0.9rem 1rem;margin-top:2rem;font-size:0.78rem;color:#555;line-height:1.6;">
+  This is a tool to find alleys for the Urban Roulette map. You may have to move down the road to find a good spot, so do not blindly add the locations this generates.
+</div>
+<p style="width:100%;max-width:420px;font-size:0.72rem;color:#333;text-align:center;margin-top:1rem;">This is still in beta mode and can be extremely inaccurate.</p>
 
 <script>
 const COUNTRIES = [
