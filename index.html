@@ -297,79 +297,90 @@
   }
 
 
-  /* Map builder panel */
-  #save-btn {
+  /* History sidebar */
+  #history-sidebar {
+    position: fixed;
+    top: 3rem;
+    right: 1.5rem;
+    width: 210px;
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: 0.75rem 1rem;
-    background: #1e1e1e;
-    color: #666;
-    font-size: 0.85rem;
-    border: 1px solid #2a2a2a;
-    cursor: pointer;
-    width: 100%;
-    font-family: inherit;
-  }
-  #save-btn:hover { background: #252525; color: #aaa; border-color: #444; }
-  #save-btn svg { width: 0.9rem; height: 0.9rem; opacity: 0.5; }
-
-  #map-builder {
-    width: 100%;
-    max-width: 420px;
-    display: none;
     flex-direction: column;
-    gap: 0.5rem;
-    margin-top: 2rem;
+    gap: 0.25rem;
   }
-  #map-builder.visible { display: flex; }
 
-  #map-builder-label {
+  #history-label {
     font-size: 0.65rem;
     color: #2a2a2a;
     text-transform: uppercase;
     letter-spacing: 0.1em;
-    margin-bottom: 0.1rem;
+    margin-bottom: 0.15rem;
+    display: none;
   }
 
-  .map-entry {
+  .hist-item {
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 0.4rem 0.75rem;
+    padding: 0.4rem 0.6rem;
     background: #161616;
-    font-size: 0.72rem;
-    color: #555;
-    gap: 1rem;
-  }
-  .map-entry-remove {
-    background: none;
-    border: none;
+    font-size: 0.68rem;
     color: #333;
-    cursor: pointer;
-    font-size: 0.8rem;
-    padding: 0;
-    line-height: 1;
-    font-family: inherit;
+    gap: 0.5rem;
   }
-  .map-entry-remove:hover { color: #f87171; }
 
-  #export-btn {
+  .hist-item-text { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hist-links { display: flex; gap: 0.4rem; flex-shrink: 0; }
+  .hist-links a { color: #2a2a2a; text-decoration: none; display: inline-flex; align-items: center; }
+  .hist-links a:hover { color: #666; }
+  .hist-links svg { width: 0.75rem; height: 0.75rem; }
+
+  /* URL converter */
+  #converter {
+    width: 100%;
+    max-width: 420px;
+    margin-top: 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  #converter-label {
+    font-size: 0.65rem;
+    color: #2a2a2a;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+
+  #sv-url-input {
+    width: 100%;
+    background: #1a1a1a;
+    border: 1px solid #2a2a2a;
+    color: #aaa;
+    font-size: 0.78rem;
+    font-family: inherit;
+    padding: 0.65rem 0.75rem;
+    outline: none;
+    resize: none;
+  }
+  #sv-url-input:focus { border-color: #444; }
+  #sv-url-input::placeholder { color: #333; }
+
+  #convert-btn {
     display: flex;
     align-items: center;
     justify-content: space-between;
     padding: 0.75rem 1rem;
-    background: #111;
+    background: #1a1a1a;
     color: #aaa;
     font-size: 0.85rem;
     border: 1px solid #2a2a2a;
     cursor: pointer;
     width: 100%;
     font-family: inherit;
-    margin-top: 0.25rem;
   }
-  #export-btn:hover { background: #1a1a1a; color: #fff; border-color: #444; }
-  #export-btn svg { width: 0.9rem; height: 0.9rem; opacity: 0.5; }
+  #convert-btn:hover { background: #222; color: #fff; border-color: #444; }
+  #convert-btn svg { width: 0.9rem; height: 0.9rem; opacity: 0.5; }
+  #converter-status { font-size: 0.72rem; color: #444; min-height: 1rem; }
 </style>
 </head>
 <body>
@@ -417,20 +428,22 @@
       View on Google Maps
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
     </a>
-    <button id="save-btn" onclick="saveToMap()">
-      Save to map
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>
-    </button>
   </div>
 </div>
 
-<div id="map-builder">
-  <div id="map-builder-label">Map builder (<span id="map-count">0</span> locations)</div>
-  <div id="map-entries"></div>
-  <button id="export-btn" onclick="exportMapJson()">
-    Export map JSON
+<div id="converter">
+  <div id="converter-label">Street View to JSON</div>
+  <textarea id="sv-url-input" rows="3" placeholder="Paste a Google Street View URL..."></textarea>
+  <button id="convert-btn" onclick="convertSvUrl()">
+    Download JSON
     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
   </button>
+  <div id="converter-status"></div>
+</div>
+
+<div id="history-sidebar">
+  <div id="history-label">Previous</div>
+  <div id="history"></div>
 </div>
 
 <p style="width:100%;max-width:420px;font-size:0.72rem;color:#333;text-align:center;margin-top:2rem;">This is still in beta mode and can be extremely inaccurate.</p>
@@ -852,64 +865,70 @@ function samplePoint(nodes) {
   return [nodes.at(-1).lat, nodes.at(-1).lon];
 }
 
-// ── Map builder ───────────────────────────────────────────────────────────
+// ── History ───────────────────────────────────────────────────────────────
 
-const mapLocations = [];
-
-function saveToMap() {
-  const panoId  = document.getElementById('result-sv').href.match(/pano=([^&]+)/)?.[1];
-  const coords  = document.getElementById('result-coords').textContent.split(', ');
-  const title   = document.getElementById('result-title').textContent;
-  if (!panoId || coords.length < 2) return;
-  const lat = parseFloat(coords[0]);
-  const lng = parseFloat(coords[1]);
-  mapLocations.push({ lat, lng, panoId, label: title });
-  renderMapBuilder();
-  // Flash button to confirm save
-  const btn = document.getElementById('save-btn');
-  btn.textContent = 'Saved!';
-  setTimeout(() => {
-    btn.innerHTML = 'Save to map <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/><polyline points="17 21 17 13 7 13 7 21"/><polyline points="7 3 7 8 15 8"/></svg>';
-  }, 1000);
+function pushHistory(title, lat, lng) {
+  const svUrl  = `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${lat},${lng}`;
+  const mapUrl = `https://www.google.com/maps?q=${lat},${lng}`;
+  const label  = document.getElementById('history-label');
+  const hist   = document.getElementById('history');
+  const div    = document.createElement('div');
+  div.className = 'hist-item';
+  div.innerHTML = `
+    <span class="hist-item-text">${title}</span>
+    <span class="hist-links">
+      <a href="${svUrl}" target="_blank" title="Street View">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="10" r="3"/><path d="M7 20.662V19a2 2 0 0 1 2-2h6a2 2 0 0 1 2 2v1.662"/></svg>
+      </a>
+      <a href="${mapUrl}" target="_blank" title="Map">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 10c0 6-9 13-9 13s-9-7-9-13a9 9 0 0 1 18 0z"/><circle cx="12" cy="10" r="3"/></svg>
+      </a>
+    </span>`;
+  hist.insertBefore(div, hist.firstChild);
+  while (hist.children.length > 15) hist.lastChild.remove();
+  label.style.display = '';
 }
 
-function removeMapEntry(idx) {
-  mapLocations.splice(idx, 1);
-  renderMapBuilder();
-}
+// ── URL converter ─────────────────────────────────────────────────────────
 
-function renderMapBuilder() {
-  const builder = document.getElementById('map-builder');
-  const entries = document.getElementById('map-entries');
-  const count   = document.getElementById('map-count');
-  count.textContent = mapLocations.length;
-  builder.classList.toggle('visible', mapLocations.length > 0);
-  entries.innerHTML = '';
-  mapLocations.forEach((loc, i) => {
-    const div = document.createElement('div');
-    div.className = 'map-entry';
-    div.innerHTML = `<span>${loc.label} &nbsp; ${loc.lat}, ${loc.lng}</span><button class="map-entry-remove" onclick="removeMapEntry(${i})" title="Remove">✕</button>`;
-    entries.appendChild(div);
-  });
-}
+function convertSvUrl() {
+  const raw    = document.getElementById('sv-url-input').value.trim();
+  const status = document.getElementById('converter-status');
+  status.textContent = '';
 
-function exportMapJson() {
-  const coords = mapLocations.map(loc => ({
-    lat: loc.lat,
-    lng: loc.lng,
-    heading: 0,
-    pitch: 0,
+  // Extract lat/lng from /@lat,lng,...
+  const coordMatch = raw.match(/@(-?\d+\.?\d*),(-?\d+\.?\d*)/);
+  if (!coordMatch) { status.textContent = 'No coordinates found in URL.'; return; }
+  const lat = parseFloat(coordMatch[1]);
+  const lng = parseFloat(coordMatch[2]);
+
+  // Extract heading from ...Xh...
+  const headingMatch = raw.match(/,(\d+\.?\d*)h/);
+  const heading = headingMatch ? parseFloat(headingMatch[1]) : 0;
+
+  // Extract tilt from ...Xt... → pitch = tilt - 90
+  const tiltMatch = raw.match(/,(\d+\.?\d*)t/);
+  const pitch = tiltMatch ? parseFloat(tiltMatch[1]) - 90 : 0;
+
+  // Extract panoId from !1sXXXX or panoid=XXXX
+  const panoMatch = raw.match(/[!&?]1s([A-Za-z0-9_\-]+)/) || raw.match(/panoid=([A-Za-z0-9_\-]+)/);
+  const panoId = panoMatch ? panoMatch[1] : null;
+
+  const location = {
+    lat, lng, heading, pitch,
     zoom: 0.1699241212803475,
     panoId: null,
     countryCode: null,
     stateCode: null,
-    extra: { panoId: loc.panoId },
-  }));
-  const json = JSON.stringify({ name: 'Locations', customCoordinates: coords });
+    extra: panoId ? { panoId } : {},
+  };
+
+  const json = JSON.stringify({ name: 'Locations', customCoordinates: [location] });
   const a = document.createElement('a');
   a.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(json);
-  a.download = 'alley-map.json';
+  a.download = 'location.json';
   a.click();
+  status.textContent = `Exported: ${lat}, ${lng}${panoId ? ' (with pano ID)' : ''}`;
 }
 
 // ── UI ────────────────────────────────────────────────────────────────────
@@ -929,6 +948,14 @@ async function findAlley() {
     return raw ? COUNTRIES.find(c => c.name.toLowerCase() === raw.toLowerCase()) || { name: raw } : null;
   })();
   if (!entry) return;
+
+  // Push current result to history before replacing it
+  if (document.getElementById('result').classList.contains('visible')) {
+    pushHistory(
+      document.getElementById('result-title').textContent,
+      ...document.getElementById('result-coords').textContent.split(', ')
+    );
+  }
 
   currentController = new AbortController();
   const { signal } = currentController;
