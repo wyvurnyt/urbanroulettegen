@@ -780,12 +780,7 @@ function calcConfidence(alleyLat, alleyLng, panoLat, panoLng, isAlleyTag, wayNod
   // Remap with a cubic curve so the scale is less optimistic:
   // 84 → 84, 71 → ~50, lower scores fall off steeply.
   const MAX_RAW = 84;
-  let remapped = Math.round(MAX_RAW * Math.pow(Math.min(score, MAX_RAW) / MAX_RAW, 3.2));
-  if (remapped >= 11 && remapped <= 74) {
-    remapped = Math.round(remapped + (Math.random() * 20 - 10));
-    remapped = Math.max(0, Math.min(84, remapped));
-  }
-  return remapped;
+  return Math.round(MAX_RAW * Math.pow(Math.min(score, MAX_RAW) / MAX_RAW, 3.2));
 }
 
 function confidenceColor(pct) {
@@ -966,8 +961,13 @@ async function findAlley() {
     const tooltip = confEl.querySelector('.tooltip');
     confEl.childNodes[0]?.nodeType === 3 && confEl.childNodes[0].remove();
     if (pano && pct) {
-      const color = confidenceColor(pct);
-      confEl.insertBefore(document.createTextNode(pct + '%'), tooltip);
+      // Apply ±10 display jitter in range 11-74 without affecting the threshold check.
+      let displayPct = pct;
+      if (pct >= 11 && pct <= 74) {
+        displayPct = Math.max(0, Math.min(84, Math.round(pct + (Math.random() * 20 - 10))));
+      }
+      const color = confidenceColor(displayPct);
+      confEl.insertBefore(document.createTextNode(displayPct + '%'), tooltip);
       confEl.style.color = color;
       confEl.style.borderBottom = `2px solid ${color}`;
     } else {
